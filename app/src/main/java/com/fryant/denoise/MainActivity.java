@@ -1,8 +1,8 @@
 package com.fryant.denoise;
 
 import android.os.Build;
-import android.support.annotation.RequiresApi;
-import android.support.v7.app.AppCompatActivity;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.os.Handler;
 import java.util.Timer;
@@ -15,8 +15,8 @@ import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Environment;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -31,6 +31,9 @@ import java.io.FileOutputStream;
 import java.util.LinkedList;
 import static android.Manifest.permission.RECORD_AUDIO;
 import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+import android.content.Intent;
+
+
 public class MainActivity extends AppCompatActivity
         implements View.OnClickListener {
 
@@ -260,34 +263,88 @@ public class MainActivity extends AppCompatActivity
 
 
     private boolean checkPermission() {
-        int result = ContextCompat.checkSelfPermission(getApplicationContext(),
-                WRITE_EXTERNAL_STORAGE);
-        int result1 = ContextCompat.checkSelfPermission(getApplicationContext(),
-                RECORD_AUDIO);
-        return result == PackageManager.PERMISSION_GRANTED &&
-                result1 == PackageManager.PERMISSION_GRANTED;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11 及以上使用 MANAGE_EXTERNAL_STORAGE 权限
+            return Environment.isExternalStorageManager() &&
+                   ContextCompat.checkSelfPermission(getApplicationContext(), RECORD_AUDIO) 
+                   == PackageManager.PERMISSION_GRANTED;
+        } else {
+            // Android 10 及以下使用传统权限
+            int storage = ContextCompat.checkSelfPermission(getApplicationContext(),
+                    WRITE_EXTERNAL_STORAGE);
+            int record = ContextCompat.checkSelfPermission(getApplicationContext(),
+                    RECORD_AUDIO);
+            return storage == PackageManager.PERMISSION_GRANTED &&
+                   record == PackageManager.PERMISSION_GRANTED;
+        }
     }
 
     private void requestPermission() {
-        ActivityCompat.requestPermissions(this, new
-                String[]{WRITE_EXTERNAL_STORAGE, RECORD_AUDIO}, REQ_PERMISSION_AUDIO);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11 及以上
+            try {
+                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.addCategory("android.intent.category.DEFAULT");
+                intent.setData(android.net.Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+                startActivityForResult(intent, 2296);
+                
+                // 同时请求录音权限
+                if (ContextCompat.checkSelfPermission(this, RECORD_AUDIO) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, 
+                        new String[]{RECORD_AUDIO}, 
+                        REQ_PERMISSION_AUDIO);
+                }
+            } catch (Exception e) {
+                Intent intent = new Intent();
+                intent.setAction(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                startActivityForResult(intent, 2296);
+            }
+        } else {
+            // Android 10 及以下
+            ActivityCompat.requestPermissions(this,
+                    new String[]{WRITE_EXTERNAL_STORAGE, RECORD_AUDIO},
+                    REQ_PERMISSION_AUDIO);
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 2296) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if (Environment.isExternalStorageManager()) {
+                    showToast("存储权限已授予");
+                } else {
+                    showToast("存储权限被拒绝");
+                }
+            }
+        }
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
+                                         String[] permissions,
+                                         int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
             case REQ_PERMISSION_AUDIO:
                 if (grantResults.length > 0) {
-                    boolean StoragePermission = grantResults[0] ==
-                            PackageManager.PERMISSION_GRANTED;
-                    boolean RecordPermission = grantResults[1] ==
-                            PackageManager.PERMISSION_GRANTED;
+                    boolean storagePermission = false;
+                    boolean recordPermission = false;
 
-                    if (StoragePermission && RecordPermission) {
-                        showToast("Permission Granted");
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        storagePermission = Environment.isExternalStorageManager();
+                        recordPermission = grantResults[0] == PackageManager.PERMISSION_GRANTED;
                     } else {
-                        showToast("Permission  Denied");
+                        storagePermission = grantResults[0] == PackageManager.PERMISSION_GRANTED;
+                        recordPermission = grantResults[1] == PackageManager.PERMISSION_GRANTED;
+                    }
+
+                    if (storagePermission && recordPermission) {
+                        showToast("所有权限已授予");
+                    } else {
+                        showToast("部分权限被拒绝");
                     }
                 }
                 break;

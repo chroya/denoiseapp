@@ -1,0 +1,12 @@
+# ninja log v5
+1	37	1747318089645553287	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/denoise.c.o	6bdb8e53b2fd14bb
+0	41	1747318089650355658	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnn.c.o	e11adefeb3b4b1f9
+0	43	1747318089652441865	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/celt_lpc.c.o	5683bed496e7456f
+0	44	1747318089654073738	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/pitch.c.o	457d3a82c4369a09
+0	44	1747318089654465904	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/kiss_fft.c.o	2bdd793009d73789
+0	46	1747318089656068570	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnnoise.c.o	948a500d9850af0c
+0	82	1747318089693341036	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnn_data.c.o	ec4030332e16e492
+82	115	1747318089725244716	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/x86_64/libdenoise.so	6c83f32f594c587
+0	42	1747318468728343288	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/x86_64/libdenoise.so	6c83f32f594c587
+0	41	1747320204272861916	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/x86_64/libdenoise.so	6c83f32f594c587
+0	53	1747483582843586979	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/x86_64/libdenoise.so	6c83f32f594c587

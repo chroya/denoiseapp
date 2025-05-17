@@ -1,0 +1,42 @@
+[
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/celt_lpc.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/celt_lpc.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/celt_lpc.c"
+},
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/denoise.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/denoise.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/denoise.c"
+},
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/kiss_fft.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/kiss_fft.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/kiss_fft.c"
+},
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/main.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/main.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/main.c"
+},
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/pitch.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/pitch.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/pitch.c"
+},
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/rnn.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/rnn.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/rnn.c"
+},
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/rnn_data.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/rnn_data.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/rnn_data.c"
+},
+{
+  "directory": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/.cxx/Debug/3d5r7124/arm64-v8a",
+  "command": "/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang --target=aarch64-none-linux-android21 --sysroot=/Users/nekliu/Documents/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/sysroot -Ddenoise_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security  -fno-limit-debug-info  -fPIC -o CMakeFiles/denoise.dir/src/main/jni/rnnoise.c.o -c /Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/rnnoise.c",
+  "file": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/app/src/main/jni/rnnoise.c"
+}
+]

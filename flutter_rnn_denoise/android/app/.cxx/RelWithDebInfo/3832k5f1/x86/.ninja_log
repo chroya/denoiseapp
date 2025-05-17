@@ -1,0 +1,10 @@
+# ninja log v5
+1	42	1747317444135829256	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/denoise.c.o	d349a7b1a3fb5302
+0	84	1747317444176140493	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnn.c.o	833f66060ba967ba
+0	88	1747317444182850984	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnn_data.c.o	beb3192871a6de55
+0	89	1747317444182396485	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/celt_lpc.c.o	466e4af303706a64
+0	122	1747317444215628314	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/pitch.c.o	4e5ad1bbbfad3698
+0	150	1747317444244226150	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnnoise.c.o	14bfb5ab3e1b2067
+0	206	1747317444300020366	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/kiss_fft.c.o	342ba7768124e5d7
+206	249	1747317444343245974	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/RelWithDebInfo/3832k5f1/obj/x86/libdenoise.so	318e9391f06447a1
+1	43	1747320169977027192	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/RelWithDebInfo/3832k5f1/obj/x86/libdenoise.so	318e9391f06447a1

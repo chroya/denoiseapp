@@ -1,0 +1,11 @@
+# ninja log v5
+2	98	1747449986	CMakeFiles/denoise.dir/src/main/jni/main.c.o	6f465daa64a62c20
+1	99	1747449986	CMakeFiles/denoise.dir/src/main/jni/denoise.c.o	9b5ba04857224408
+2	106	1747449986	CMakeFiles/denoise.dir/src/main/jni/rnn.c.o	d0f1354d4d1af8c9
+0	106	1747449986	CMakeFiles/denoise.dir/src/main/jni/celt_lpc.c.o	43cde4b765dea3fb
+1	111	1747449986	CMakeFiles/denoise.dir/src/main/jni/kiss_fft.c.o	10bf17e04dea5b92
+3	118	1747449986	CMakeFiles/denoise.dir/src/main/jni/rnnoise.c.o	f600cb9ad360c94b
+2	124	1747449986	CMakeFiles/denoise.dir/src/main/jni/pitch.c.o	6b405e4d6af8f7ea
+3	178	1747449986	CMakeFiles/denoise.dir/src/main/jni/rnn_data.c.o	80b1c8109230e2ae
+178	268	1747449986	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/x86/libdenoise.so	5c8ce077fc87da52
+1	173	1747470367	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/x86/libdenoise.so	5c8ce077fc87da52

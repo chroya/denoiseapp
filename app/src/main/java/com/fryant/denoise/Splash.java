@@ -1,35 +1,31 @@
 package com.fryant.denoise;
 
 import android.content.Intent;
-
-import android.support.v7.app.AppCompatActivity;
-
 import android.os.Bundle;
-
+import android.os.Handler;
+import android.os.Looper;
 import android.view.WindowManager;
+import androidx.appcompat.app.AppCompatActivity;
 
 public class Splash extends AppCompatActivity {
+
+    private static final long SPLASH_DELAY = 4000; // 4秒
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);//隐藏状态栏
-        getSupportActionBar().hide();//隐藏标题栏
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN); // 隐藏状态栏
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().hide(); // 隐藏标题栏
+        }
         setContentView(R.layout.activity_splash);
         getWindow().setBackgroundDrawableResource(R.drawable.splashgo);
-        Thread myThread = new Thread() {//创建子线程
-            @Override
-            public void run() {
-                try {
-                    sleep(4000);//使程序休眠四秒
-                    Intent it = new Intent(getApplicationContext(), MainActivity.class);//启动MainActivity
-                    startActivity(it);
-                    finish();//关闭当前活动
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        };
-        myThread.start();//启动线程
+        
+        // 使用 Handler 替代 Thread，这是更好的实践
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            Intent intent = new Intent(this, MainActivity.class);
+            startActivity(intent);
+            finish();
+        }, SPLASH_DELAY);
     }
 }

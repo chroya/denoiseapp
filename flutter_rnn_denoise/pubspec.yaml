@@ -1,0 +1,33 @@
+name: flutter_rnn_denoise
+description: "RNN语音降噪应用"
+publish_to: "none"
+version: 1.0.0+1
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  ffi: ^2.1.0
+  path_provider: ^2.1.5
+  path: ^1.8.3
+  flutter_sound: ^9.2.13
+  permission_handler: ^12.0.0+1
+  audio_session: ^0.1.16
+  record: ^6.0.0
+  fluttertoast: ^8.2.4
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+  ffigen: ^8.0.2
+flutter:
+  uses-material-design: true
+ffigen:
+  name: RNNoise
+  description: "Bindings to RNNoise C library"
+  output: "lib/src/rnnoise_bindings.dart"
+  headers:
+    entry-points:
+      - "src/rnnoise.h"
+  language-binding: Dart

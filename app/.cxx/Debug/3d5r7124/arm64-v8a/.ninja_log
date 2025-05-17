@@ -1,0 +1,15 @@
+# ninja log v5
+1	169	1747449984	CMakeFiles/denoise.dir/src/main/jni/denoise.c.o	92d28c5a74fd8087
+2	188	1747449984	CMakeFiles/denoise.dir/src/main/jni/main.c.o	b1630db08b3c2ce3
+10	227	1747449985	CMakeFiles/denoise.dir/src/main/jni/rnn.c.o	aa883fb1b1ac23ca
+0	253	1747449985	CMakeFiles/denoise.dir/src/main/jni/celt_lpc.c.o	f578f86cdccf9311
+5	264	1747449985	CMakeFiles/denoise.dir/src/main/jni/pitch.c.o	981cb89acf67921d
+1	276	1747449985	CMakeFiles/denoise.dir/src/main/jni/kiss_fft.c.o	a6d25799e63e6309
+14	292	1747449985	CMakeFiles/denoise.dir/src/main/jni/rnnoise.c.o	b5e69c6165346cee
+12	317	1747449985	CMakeFiles/denoise.dir/src/main/jni/rnn_data.c.o	e59b6d13c8ee27b3
+317	423	1747449985	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/arm64-v8a/libdenoise.so	43a97a4dd4b6ac2b
+9	3054	1747468806	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/arm64-v8a/libdenoise.so	43a97a4dd4b6ac2b
+2	2854	1747469974	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/arm64-v8a/libdenoise.so	43a97a4dd4b6ac2b
+1	325	1747470367	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/arm64-v8a/libdenoise.so	43a97a4dd4b6ac2b
+0	387	1747470387	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/arm64-v8a/libdenoise.so	43a97a4dd4b6ac2b
+1	481	1747470586	../../../../build/intermediates/cxx/Debug/3d5r7124/obj/arm64-v8a/libdenoise.so	43a97a4dd4b6ac2b

@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/android/app/src/main/jni/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/nekliu/Documents/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/android/app/.cxx/Debug/266u6j56/x86",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/nekliu/Documents/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/android/app/.cxx/Debug/266u6j56/x86",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "denoise::@6890427a1f51a3e7e1df": {
+      "artifactName": "denoise",
+      "abi": "x86",
+      "output": "/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/x86/libdenoise.so",
+      "runtimeFiles": []
+    }
+  }
+}

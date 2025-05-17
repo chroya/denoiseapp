@@ -1,0 +1,12 @@
+# ninja log v5
+1	35	1747318088806396871	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/denoise.c.o	a4924753233a30c8
+0	39	1747318088810456326	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnn.c.o	1323f229f16b97f7
+0	41	1747318088812991199	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/celt_lpc.c.o	cb8eff2c4006a7eb
+0	45	1747318088816430612	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/pitch.c.o	391d6e10ef0e9ce4
+0	49	1747318088820561275	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnnoise.c.o	beedad10879cb36
+0	49	1747318088821426024	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/kiss_fft.c.o	8df2c78276070e67
+0	80	1747318088851981580	CMakeFiles/denoise.dir/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/src/rnn_data.c.o	c89b329da609dc03
+80	116	1747318088887320840	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/armeabi-v7a/libdenoise.so	83cbb3cfc8e794d6
+1	42	1747318468617776091	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/armeabi-v7a/libdenoise.so	83cbb3cfc8e794d6
+0	44	1747320204154342124	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/armeabi-v7a/libdenoise.so	83cbb3cfc8e794d6
+0	53	1747483582707312142	/Users/nekliu/Documents/gitwork/RNN-based-Speech-noise-reduction-android-app/flutter_rnn_denoise/build/app/intermediates/cxx/Debug/266u6j56/obj/armeabi-v7a/libdenoise.so	83cbb3cfc8e794d6
