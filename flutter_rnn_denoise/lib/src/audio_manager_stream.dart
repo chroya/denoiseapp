@@ -154,6 +154,159 @@ class AudioManagerStream {
     }
   }
   
+  /// 手动测试RNNoise FFI调用（可选调用）
+  Future<void> testRNNoiseFFI() async {
+    try {
+      print('=== RNNoise FFI测试开始 ===');
+      
+      // 测试1: 纯噪声输入
+      final noiseAudio = Float32List(FRAME_SIZE);
+      for (int i = 0; i < FRAME_SIZE; i++) {
+        noiseAudio[i] = (math.Random().nextDouble() - 0.5) * 0.5; // 随机噪声
+      }
+      
+      final noiseResult = _rnnoise.processFrames(noiseAudio, 1);
+      final noiseInputRMS = _calculateRMS(noiseAudio);
+      final noiseOutputRMS = _calculateRMS(noiseResult.processedAudio);
+      
+      print('噪声测试:');
+      print('  输入RMS: ${noiseInputRMS.toStringAsFixed(4)}');
+      print('  输出RMS: ${noiseOutputRMS.toStringAsFixed(4)}');
+      print('  VAD概率: ${noiseResult.vadProbability.toStringAsFixed(3)}');
+      print('  抑制比: ${(noiseOutputRMS/noiseInputRMS).toStringAsFixed(3)}');
+      
+      // 测试2: 语音信号输入
+      final speechAudio = Float32List(FRAME_SIZE);
+      for (int i = 0; i < FRAME_SIZE; i++) {
+        final t = i / SAMPLE_RATE;
+        speechAudio[i] = math.sin(2 * math.pi * 440 * t) * 0.3; // 440Hz正弦波
+      }
+      
+      final speechResult = _rnnoise.processFrames(speechAudio, 1);
+      final speechInputRMS = _calculateRMS(speechAudio);
+      final speechOutputRMS = _calculateRMS(speechResult.processedAudio);
+      
+      print('语音测试:');
+      print('  输入RMS: ${speechInputRMS.toStringAsFixed(4)}');
+      print('  输出RMS: ${speechOutputRMS.toStringAsFixed(4)}');
+      print('  VAD概率: ${speechResult.vadProbability.toStringAsFixed(3)}');
+      print('  保留比: ${(speechOutputRMS/speechInputRMS).toStringAsFixed(3)}');
+      
+      // 测试3: 混合信号（语音+噪声）
+      final mixedAudio = Float32List(FRAME_SIZE);
+      for (int i = 0; i < FRAME_SIZE; i++) {
+        final t = i / SAMPLE_RATE;
+        final speech = math.sin(2 * math.pi * 440 * t) * 0.3;
+        final noise = (math.Random().nextDouble() - 0.5) * 0.2;
+        mixedAudio[i] = speech + noise;
+      }
+      
+      final mixedResult = _rnnoise.processFrames(mixedAudio, 1);
+      final mixedInputRMS = _calculateRMS(mixedAudio);
+      final mixedOutputRMS = _calculateRMS(mixedResult.processedAudio);
+      
+      print('混合信号测试:');
+      print('  输入RMS: ${mixedInputRMS.toStringAsFixed(4)}');
+      print('  输出RMS: ${mixedOutputRMS.toStringAsFixed(4)}');
+      print('  VAD概率: ${mixedResult.vadProbability.toStringAsFixed(3)}');
+      print('  处理比: ${(mixedOutputRMS/mixedInputRMS).toStringAsFixed(3)}');
+      
+      // 判断RNNoise是否工作正常
+      bool isWorking = false;
+      if (noiseResult.vadProbability < 0.5 && (noiseOutputRMS < noiseInputRMS * 0.8)) {
+        print('✅ 噪声正确被抑制');
+        isWorking = true;
+      } else {
+        print('❌ 噪声抑制效果不佳');
+      }
+      
+      if (speechResult.vadProbability > 0.3 && (speechOutputRMS > speechInputRMS * 0.7)) {
+        print('✅ 语音信号正确保留');
+        isWorking = true;
+      } else {
+        print('❌ 语音信号保留不佳');
+      }
+      
+      if (isWorking) {
+        print('✅ RNNoise FFI基本功能正常');
+      } else {
+        print('⚠️  RNNoise FFI可能存在问题，建议检查C层实现');
+      }
+      
+      print('=== RNNoise FFI测试结束 ===');
+      
+    } catch (e) {
+      print('FFI测试失败: $e');
+      throw e;
+    }
+  }
+  
+  /// 生成带噪声的测试音频（用于验证降噪效果）
+  Future<void> generateNoisyTestAudio() async {
+    if (!_isInitialized) {
+      onError?.call('音频管理器未初始化');
+      return;
+    }
+    
+    try {
+      print('开始生成带噪声的测试音频...');
+      
+      // 清空缓冲区
+      _completeProcessedAudio.clear();
+      _completeOriginalAudio.clear();
+      
+      // 生成5秒的测试音频（48kHz = 240000样本）
+      const totalSamples = SAMPLE_RATE * 5;
+      const numFrames = totalSamples ~/ FRAME_SIZE;
+      
+      for (int frameIndex = 0; frameIndex < numFrames; frameIndex++) {
+        // 生成一帧音频：语音信号 + 噪声
+        final inputFrame = Float32List(FRAME_SIZE);
+        
+        for (int i = 0; i < FRAME_SIZE; i++) {
+          final t = (frameIndex * FRAME_SIZE + i) / SAMPLE_RATE;
+          
+          // 语音信号：多频率正弦波组合（模拟语音）
+          final speech = math.sin(2 * math.pi * 440 * t) * 0.3 +  // 基频
+                        math.sin(2 * math.pi * 880 * t) * 0.2 +  // 倍频
+                        math.sin(2 * math.pi * 1320 * t) * 0.1; // 高频
+          
+          // 背景噪声：白噪声
+          final noise = (math.Random().nextDouble() - 0.5) * 0.4;
+          
+          // 组合信号
+          inputFrame[i] = speech + noise;
+        }
+        
+        // 调用FFI处理
+        final result = _rnnoise.processFrames(inputFrame, 1);
+        
+        // 保存到缓冲区
+        _completeOriginalAudio.add(Float32List.fromList(inputFrame));
+        _completeProcessedAudio.add(Float32List.fromList(result.processedAudio));
+        
+        // 显示进度
+        if (frameIndex % 100 == 0) {
+          final progress = (frameIndex / numFrames * 100).toInt();
+          print('生成进度: $progress% (${frameIndex}/${numFrames}帧)');
+        }
+      }
+      
+      // 保存测试音频文件
+      await _saveFinalAudioFiles();
+      
+      // 分析降噪效果
+      _analyzeAudioDifference();
+      
+      onStatusChanged?.call('带噪声测试音频生成完成');
+      print('测试音频生成完成，可以播放对比降噪效果');
+      
+    } catch (e) {
+      onError?.call('生成测试音频失败: $e');
+      print('生成测试音频失败: $e');
+    }
+  }
+  
   /// 初始化流处理器
   Future<void> _initializeStreamProcessor() async {
     try {
@@ -209,6 +362,24 @@ class AudioManagerStream {
     // 初始化两个播放器用于原始音频和处理后音频
     await _originalPlayer.setVolume(1.0);
     await _processedPlayer.setVolume(1.0);
+    
+    // 设置播放状态监听器
+    _originalPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        _isPlaying = false;
+        onStatusChanged?.call('原始音频播放完成');
+        print('原始音频播放完成');
+      }
+    });
+    
+    _processedPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        _isPlaying = false;
+        onStatusChanged?.call('降噪音频播放完成');
+        print('降噪音频播放完成');
+      }
+    });
+    
     _isPlayerInitialized = true;
     print('just_audio播放器初始化完成');
   }
@@ -415,6 +586,20 @@ class AudioManagerStream {
         // 调用FFI进行降噪处理
         final result = _rnnoise.processFrames(inputFrame, 1);
         
+        // 添加调试信息，验证FFI是否真正在工作
+        final inputRMS = _calculateRMS(inputFrame);
+        final outputRMS = _calculateRMS(result.processedAudio);
+        final vadProb = result.vadProbability;
+        
+        // 每处理100帧打印一次详细信息
+        if (_completeProcessedAudio.length % 100 == 0) {
+          print('FFI处理验证 - 帧数: ${_completeProcessedAudio.length}, '
+                '输入RMS: ${inputRMS.toStringAsFixed(4)}, '
+                '输出RMS: ${outputRMS.toStringAsFixed(4)}, '
+                'VAD概率: ${vadProb.toStringAsFixed(3)}, '
+                '音频变化: ${(outputRMS/inputRMS).toStringAsFixed(3)}');
+        }
+        
         // 保存到实时缓冲区（用于实时显示）
         _originalAudioBuffer.add(inputFrame);
         _processedAudioBuffer.add(result.processedAudio);
@@ -476,6 +661,9 @@ class AudioManagerStream {
       
       // 保存最终的音频文件
       await _saveFinalAudioFiles();
+      
+      // 分析音频处理效果
+      _analyzeAudioDifference();
       
       onStatusChanged?.call('停止实时流处理');
       onStateChanged?.call();
@@ -605,6 +793,9 @@ class AudioManagerStream {
   /// 保存音频数据为WAV文件
   Future<void> _saveAudioAsWav(Float32List audioData, String filePath) async {
     try {
+      print('开始保存WAV文件: $filePath');
+      print('音频数据长度: ${audioData.length}样本');
+      
       final file = File(filePath);
       
       // 转换float32到int16
@@ -621,6 +812,13 @@ class AudioManagerStream {
       final blockAlign = numChannels * bitsPerSample ~/ 8;
       final dataSize = int16Data.length * 2;
       final fileSize = 36 + dataSize;
+      
+      print('WAV文件参数:');
+      print('  采样率: ${sampleRate}Hz');
+      print('  声道数: $numChannels');
+      print('  位深度: ${bitsPerSample}bit');
+      print('  数据大小: ${dataSize}字节');
+      print('  文件大小: ${fileSize}字节');
       
       final header = ByteData(44);
       header.setUint32(0, 0x52494646, Endian.big); // "RIFF"
@@ -644,7 +842,21 @@ class AudioManagerStream {
       
       await file.writeAsBytes(bytes);
       
+      // 验证文件是否成功保存
+      final savedFile = File(filePath);
+      if (await savedFile.exists()) {
+        final savedSize = await savedFile.length();
+        print('WAV文件保存成功: ${savedSize}字节');
+        
+        if (savedSize != bytes.length) {
+          print('警告：保存的文件大小与预期不符');
+        }
+      } else {
+        print('错误：WAV文件保存失败，文件不存在');
+      }
+      
     } catch (e) {
+      print('保存WAV文件失败: $e');
       throw Exception('保存WAV文件失败: $e');
     }
   }
@@ -661,42 +873,106 @@ class AudioManagerStream {
   
   /// 播放实时音频的通用方法
   Future<void> _playRealtimeAudio(String audioPath, AudioPlayer player, String message) async {
+    print('准备播放音频: $audioPath');
+    
     if (!_isPlayerInitialized) {
+      print('播放器未初始化');
+      onError?.call('播放器未初始化');
       return;
     }
     
     final audioFile = File(audioPath);
     if (!await audioFile.exists()) {
+      print('音频文件不存在: $audioPath');
       onError?.call('音频文件不存在，请等待音频数据积累');
       return;
     }
     
+    // 检查文件大小
+    final fileSize = await audioFile.length();
+    print('音频文件大小: ${fileSize}字节');
+    
+    if (fileSize < 1000) { // 小于1KB的文件可能有问题
+      print('音频文件太小，可能数据不完整');
+      onError?.call('音频文件数据不完整，请重新录音');
+      return;
+    }
+    
     try {
+      // 如果正在播放，先停止
       if (player.playing) {
+        print('停止当前播放');
         await player.stop();
         _isPlaying = false;
         onStatusChanged?.call('停止播放');
         return;
       }
       
+      print('设置音频文件路径: $audioPath');
       await player.setFilePath(audioPath);
+      
+      print('开始播放音频');
       await player.play();
       _isPlaying = true;
       
       onStatusChanged?.call(message);
       Fluttertoast.showToast(msg: message);
       
-      // 监听播放完成
-      player.playerStateStream.listen((state) {
-        if (state.processingState == ProcessingState.completed) {
-          _isPlaying = false;
-          onStatusChanged?.call('播放完成');
-        }
-      });
+      print('播放开始成功: $message');
       
     } catch (e) {
+      print('播放失败: $e');
       onError?.call('播放失败: $e');
+      _isPlaying = false;
       throw Exception('播放失败: $e');
+    }
+  }
+  
+  /// 计算音频RMS值（用于验证处理效果）
+  double _calculateRMS(Float32List audioData) {
+    if (audioData.isEmpty) return 0.0;
+    
+    double sum = 0.0;
+    for (int i = 0; i < audioData.length; i++) {
+      sum += audioData[i] * audioData[i];
+    }
+    return math.sqrt(sum / audioData.length);
+  }
+  
+  /// 比较原始音频和处理后音频的差异
+  void _analyzeAudioDifference() {
+    if (_completeOriginalAudio.isEmpty || _completeProcessedAudio.isEmpty) {
+      return;
+    }
+    
+    final originalMerged = _mergeAudioFrames(_completeOriginalAudio);
+    final processedMerged = _mergeAudioFrames(_completeProcessedAudio);
+    
+    final originalRMS = _calculateRMS(originalMerged);
+    final processedRMS = _calculateRMS(processedMerged);
+    
+    // 计算平均差异
+    double totalDiff = 0.0;
+    final minLength = math.min(originalMerged.length, processedMerged.length);
+    
+    for (int i = 0; i < minLength; i++) {
+      totalDiff += (originalMerged[i] - processedMerged[i]).abs();
+    }
+    
+    final avgDiff = totalDiff / minLength;
+    final rmsRatio = processedRMS / originalRMS;
+    
+    print('=== 音频处理分析报告 ===');
+    print('原始音频RMS: ${originalRMS.toStringAsFixed(6)}');
+    print('处理后音频RMS: ${processedRMS.toStringAsFixed(6)}');
+    print('RMS比值: ${rmsRatio.toStringAsFixed(3)} (1.0表示无变化)');
+    print('平均样本差异: ${avgDiff.toStringAsFixed(6)}');
+    print('处理样本数: ${minLength}');
+    
+    if (avgDiff < 0.001) {
+      print('⚠️  警告：音频差异很小，可能FFI处理未生效');
+    } else {
+      print('✅ 音频已通过FFI处理，存在明显差异');
     }
   }
   

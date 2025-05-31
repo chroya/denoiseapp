@@ -168,32 +168,63 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
     }
   }
   
-  /// 运行FFI测试
+  /// 运行FFI功能测试
   Future<void> _runFFITest() async {
     if (mounted) setState(() {
-      _isTestRunning = true;
-      _testResults = '正在运行测试...';
+      _statusMessage = '正在运行FFI功能测试...';
     });
     
     try {
-      final success = await RNNoiseTest.runAllTests();
+      await _audioManager.testRNNoiseFFI();
       
       if (mounted) setState(() {
-        _testResults = RNNoiseTest.getOutput();
-        _isTestRunning = false;
+        _statusMessage = 'FFI功能测试完成，请查看控制台输出';
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'FFI测试全部通过!' : 'FFI测试发现问题'),
-          backgroundColor: success ? Colors.green : Colors.red,
+        const SnackBar(
+          content: Text('FFI功能测试完成！请查看控制台输出结果'),
+          backgroundColor: Colors.orange,
         ),
       );
     } catch (e) {
       if (mounted) setState(() {
-        _testResults = '测试过程中发生错误: $e';
-        _isTestRunning = false;
+        _statusMessage = 'FFI功能测试失败: $e';
       });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('FFI功能测试失败: $e')),
+      );
+    }
+  }
+  
+  /// 生成带噪声测试音频
+  Future<void> _generateNoisyTestAudio() async {
+    if (mounted) setState(() {
+      _statusMessage = '正在生成带噪声测试音频...';
+    });
+    
+    try {
+      await _audioManager.generateNoisyTestAudio();
+      
+      if (mounted) setState(() {
+        _statusMessage = '带噪声测试音频生成完成，可以播放对比';
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('测试音频生成完成！可以播放原始音频和降噪音频进行对比'),
+          backgroundColor: Colors.purple,
+        ),
+      );
+    } catch (e) {
+      if (mounted) setState(() {
+        _statusMessage = '生成测试音频失败: $e';
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('生成测试音频失败: $e')),
+      );
     }
   }
   
@@ -383,6 +414,49 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            
+            // 测试功能区域
+            const SizedBox(height: 16),
+            Text(
+              '调试工具',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _isInitialized ? _runFFITest : null,
+              icon: const Icon(Icons.bug_report),
+              label: const Text('运行FFI功能测试'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '验证RNNoise FFI调用是否正常工作',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _isInitialized ? _generateNoisyTestAudio : null,
+              icon: const Icon(Icons.science),
+              label: const Text('生成带噪声测试音频'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '生成包含语音信号和噪声的测试音频，验证FFI降噪效果',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.grey[600],
               ),
             ),
             
