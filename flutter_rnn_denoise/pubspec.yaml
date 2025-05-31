@@ -15,7 +15,9 @@ dependencies:
   permission_handler: ^12.0.0+1
   audio_session: ^0.1.16
   record: ^6.0.0
+  just_audio: ^0.9.36
   fluttertoast: ^8.2.4
+  file_picker: ^6.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -29,5 +31,5 @@ ffigen:
   output: "lib/src/rnnoise_bindings.dart"
   headers:
     entry-points:
-      - "src/rnnoise.h"
+      - "src/include/rnnoise.h"
   language-binding: Dart

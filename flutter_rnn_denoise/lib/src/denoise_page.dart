@@ -1,97 +1,96 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'audio_manager.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:file_picker/file_picker.dart';
+import './audio_processor.dart';
 
 class DenoisePage extends StatefulWidget {
   const DenoisePage({Key? key}) : super(key: key);
 
   @override
-  _DenoisePageState createState() => _DenoisePageState();
+  State<DenoisePage> createState() => _DenoisePageState();
 }
 
 class _DenoisePageState extends State<DenoisePage> {
-  final AudioManager _audioManager = AudioManager();
-  bool _isInitialized = false;
+  final _audioProcessor = AudioProcessor();
   bool _isProcessing = false;
+  bool _isPlaying = false;
+  Duration? _duration;
+  Duration _position = Duration.zero;
+  String? _currentFile;
+  String? _processedFile;
 
   @override
   void initState() {
     super.initState();
-    _initializeAudioManager();
+    _setupAudioProcessor();
   }
 
-  Future<void> _initializeAudioManager() async {
-    try {
-      await _audioManager.initialize();
+  void _setupAudioProcessor() {
+    _audioProcessor.playerStateStream.listen((state) {
       setState(() {
-        _isInitialized = true;
+        _isPlaying = state.playing;
       });
+    });
+
+    _audioProcessor.positionStream.listen((position) {
+      setState(() {
+        _position = position;
+      });
+    });
+  }
+
+  Future<void> _pickAudioFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowedExtensions: ['wav', 'mp3', 'm4a', 'aac'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        await _loadAudioFile(result.files.single.path!);
+      }
     } catch (e) {
-      _showErrorDialog('初始化失败', e.toString());
+      Fluttertoast.showToast(msg: '选择文件失败: $e');
     }
   }
 
-  void _showErrorDialog(String title, String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleRecordButton() async {
-    if (_audioManager.isRecording) {
-      try {
-        await _audioManager.stopRecording();
-      } catch (e) {
-        _showErrorDialog('停止录音失败', e.toString());
-        // 即使出现异常，也要强制更新状态，避免UI卡在录音状态
-        setState(() {
-          // 强制刷新UI
-        });
-      }
-    } else {
-      try {
-        await _audioManager.startRecording();
-      } catch (e) {
-        _showErrorDialog('录音失败', e.toString());
-      }
+  Future<void> _loadAudioFile(String filePath) async {
+    try {
+      await _audioProcessor.loadAudio(filePath);
+      setState(() {
+        _currentFile = filePath;
+        _processedFile = null; // 重置处理后的文件
+        _duration = _audioProcessor.duration;
+      });
+      Fluttertoast.showToast(msg: '文件加载成功');
+    } catch (e) {
+      Fluttertoast.showToast(msg: '加载音频文件失败: $e');
     }
-    setState(() {});
   }
 
-  Future<void> _handlePlayOriginalButton() async {
-    if (_audioManager.isPlaying) {
-      await _audioManager.stopPlayingOriginal();
-    } else {
-      try {
-        await _audioManager.playOriginal();
-      } catch (e) {
-        _showErrorDialog('播放失败', e.toString());
-      }
-    }
-    setState(() {});
-  }
+  Future<void> _processAudio() async {
+    if (_currentFile == null || _isProcessing) return;
 
-  Future<void> _handleProcessButton() async {
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      final success = await _audioManager.processAudio();
-      if (!success) {
-        _showErrorDialog('处理失败', '音频处理返回错误');
+      final processedPath = await _audioProcessor.processAudio();
+      if (processedPath != null) {
+        setState(() {
+          _processedFile = processedPath;
+          _duration = _audioProcessor.duration;
+        });
+        Fluttertoast.showToast(msg: '处理完成！音频已降噪');
+      } else {
+        Fluttertoast.showToast(msg: '处理失败');
       }
     } catch (e) {
-      _showErrorDialog('处理失败', e.toString());
+      Fluttertoast.showToast(msg: '处理失败: $e');
     } finally {
       setState(() {
         _isProcessing = false;
@@ -99,177 +98,155 @@ class _DenoisePageState extends State<DenoisePage> {
     }
   }
 
-  Future<void> _handlePlayProcessedButton() async {
-    if (_audioManager.isPlayingProcessed) {
-      await _audioManager.stopPlayingProcessed();
+  Future<void> _togglePlayback() async {
+    if (_isPlaying) {
+      await _audioProcessor.pause();
     } else {
-      try {
-        await _audioManager.playProcessed();
-      } catch (e) {
-        _showErrorDialog('播放失败', e.toString());
-      }
+      await _audioProcessor.play();
     }
-    setState(() {});
   }
 
-  void _handleRealTimeModeToggle() {
-    _audioManager.toggleRealTimeMode();
-    setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isInitialized) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+  Future<void> _seekToPosition(double value) async {
+    final duration = _duration;
+    if (duration != null) {
+      final position = Duration(seconds: value.toInt());
+      await _audioProcessor.player.seek(position);
     }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('RNN语音降噪'),
-        backgroundColor: Colors.blue,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.blue, Colors.indigo],
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Spacer(),
-            _buildRecordButton(),
-            const SizedBox(height: 20),
-            _buildButtonRow(),
-            const SizedBox(height: 20),
-            _buildProcessButton(),
-            const SizedBox(height: 20),
-            _buildRealTimeModeToggle(),
-            const Spacer(),
-          ],
-        ),
-      ),
-    );
   }
 
-  Widget _buildRecordButton() {
-    return GestureDetector(
-      onTap: _handleRecordButton,
-      child: Container(
-        width: 120,
-        height: 120,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _audioManager.isRecording ? Colors.red : Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Icon(
-          _audioManager.isRecording ? Icons.stop : Icons.mic,
-          size: 50,
-          color: _audioManager.isRecording ? Colors.white : Colors.red,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildButtonRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildActionButton(
-          icon: _audioManager.isPlaying ? Icons.stop : Icons.play_arrow,
-          label: '原始音频',
-          onPressed: _handlePlayOriginalButton,
-          isEnabled: !_audioManager.isRecording,
-        ),
-        const SizedBox(width: 40),
-        _buildActionButton(
-          icon: _audioManager.isPlayingProcessed ? Icons.stop : Icons.play_arrow,
-          label: '降噪音频',
-          onPressed: _handlePlayProcessedButton,
-          isEnabled: !_audioManager.isRecording,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProcessButton() {
-    return _buildActionButton(
-      icon: Icons.auto_fix_high,
-      label: '降噪处理',
-      onPressed: _isProcessing ? null : _handleProcessButton,
-      isEnabled: !_audioManager.isRecording && !_isProcessing,
-      isLoading: _isProcessing,
-    );
-  }
-
-  Widget _buildRealTimeModeToggle() {
-    return SwitchListTile(
-      title: const Text(
-        '实时降噪模式',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      value: _audioManager.isRealTimeEnabled,
-      onChanged: (value) => _handleRealTimeModeToggle(),
-      activeColor: Colors.green,
-      inactiveTrackColor: Colors.grey,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 40),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onPressed,
-    required bool isEnabled,
-    bool isLoading = false,
-  }) {
-    return ElevatedButton(
-      onPressed: isEnabled ? onPressed : null,
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          isLoading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-              : Icon(icon),
-          const SizedBox(width: 8),
-          Text(label),
-        ],
-      ),
-    );
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
   }
 
   @override
   void dispose() {
-    _audioManager.dispose();
+    _audioProcessor.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('音频降噪'),
+        backgroundColor: Colors.blue,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '原始文件: ${_currentFile?.split('/').last ?? '未选择文件'}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (_processedFile != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '处理后文件: ${_processedFile?.split('/').last}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_duration != null) ...[
+              Slider(
+                value: _position.inSeconds.toDouble(),
+                max: _duration?.inSeconds.toDouble() ?? 0,
+                onChanged: _seekToPosition,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_formatDuration(_position)),
+                    Text(_formatDuration(_duration ?? Duration.zero)),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _pickAudioFile,
+                  icon: const Icon(Icons.file_upload),
+                  label: const Text('选择文件'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _currentFile == null || _isProcessing ? null : _processAudio,
+                  icon: _isProcessing 
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.cleaning_services),
+                  label: Text(_isProcessing ? '处理中...' : '降噪处理'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _currentFile == null ? null : _togglePlayback,
+              icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+              label: Text(_isPlaying ? '暂停' : '播放'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            if (_processedFile != null) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              Text(
+                '降噪完成！',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '当前播放的是降噪后的音频',
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
