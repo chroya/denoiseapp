@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 import 'audio_manager_stream.dart';
 import 'audio_stream_processor.dart';
 import 'rnnoise_test.dart';
@@ -27,6 +29,10 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
   
   // 音频文件可用性状态
   bool _hasRealtimeAudioFiles = false;
+  
+  // 文件选择处理相关状态
+  bool _hasSelectedAudioFiles = false;
+  String? _selectedFileName;
   
   // 定时器
   Timer? _statsTimer;
@@ -103,9 +109,11 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
       if (mounted) {
         // 检查音频文件可用性
         final hasFiles = await _audioManager.hasRealtimeAudioFiles;
+        final hasSelectedFiles = await _audioManager.hasSelectedAudioFiles;
         
         setState(() {
           _hasRealtimeAudioFiles = hasFiles;
+          _hasSelectedAudioFiles = hasSelectedFiles;
           
           if (_audioManager.isStreamProcessing) {
             _stats = _audioManager.streamStats;
@@ -228,6 +236,41 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
     }
   }
   
+  /// 选择音频文件进行降噪处理
+  Future<void> _selectAndProcessAudioFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['wav', 'mp3', 'm4a', 'aac'],
+      );
+      
+      if (result != null && result.files.single.path != null) {
+        final filePath = result.files.single.path!;
+        final fileName = result.files.single.name;
+        
+        final file = File(filePath);
+        if (!await file.exists()) {
+          throw Exception('选择的文件不存在');
+        }
+        
+        if (mounted) setState(() {
+          _selectedFileName = fileName;
+          _statusMessage = '已选择文件: $fileName';
+        });
+        
+        await _audioManager.selectAudioFileAndPreparePaths(filePath);
+      }
+    } catch (e) {
+      if (mounted) setState(() {
+        _statusMessage = '选择或准备音频文件失败: $e';
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('选择或准备音频文件失败: $e')),
+      );
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -247,6 +290,10 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
               
               // 实时处理控制
               _buildStreamControlCard(),
+              const SizedBox(height: 16),
+              
+              // 文件选择处理卡片
+              _buildFileProcessingCard(),
               const SizedBox(height: 16),
               
               // 统计信息
@@ -318,6 +365,20 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  _audioManager.isFileProcessing ? Icons.hourglass_bottom : Icons.done,
+                  color: _audioManager.isFileProcessing ? Colors.orange : Colors.grey,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '文件处理: ${_audioManager.isFileProcessing ? "处理中" : "空闲"}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -364,23 +425,23 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: (_isInitialized && !_audioManager.isStreamProcessing) 
-                        ? _toggleRecording : null,
-                    icon: Icon(_audioManager.isRecording 
-                        ? Icons.stop : Icons.fiber_manual_record),
-                    label: Text(_audioManager.isRecording 
-                        ? '停止' : '仅录音'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _audioManager.isRecording 
-                          ? Colors.orange : Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
+                // const SizedBox(width: 8),
+                // Expanded(
+                //   child: ElevatedButton.icon(
+                //     onPressed: (_isInitialized && !_audioManager.isStreamProcessing) 
+                //         ? _toggleRecording : null,
+                //     icon: Icon(_audioManager.isRecording 
+                //         ? Icons.stop : Icons.fiber_manual_record),
+                //     label: Text(_audioManager.isRecording 
+                //         ? '停止' : '仅录音'),
+                //     style: ElevatedButton.styleFrom(
+                //       backgroundColor: _audioManager.isRecording 
+                //           ? Colors.orange : Colors.blue,
+                //       foregroundColor: Colors.white,
+                //       padding: const EdgeInsets.symmetric(vertical: 12),
+                //     ),
+                //   ),
+                // ),
               ],
             ),
             
@@ -423,24 +484,24 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
               '调试工具',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: _isInitialized ? _runFFITest : null,
-              icon: const Icon(Icons.bug_report),
-              label: const Text('运行FFI功能测试'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '验证RNNoise FFI调用是否正常工作',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
-              ),
-            ),
+            // const SizedBox(height: 8),
+            // ElevatedButton.icon(
+            //   onPressed: _isInitialized ? _runFFITest : null,
+            //   icon: const Icon(Icons.bug_report),
+            //   label: const Text('运行FFI功能测试'),
+            //   style: ElevatedButton.styleFrom(
+            //     backgroundColor: Colors.orange,
+            //     foregroundColor: Colors.white,
+            //     padding: const EdgeInsets.symmetric(vertical: 8),
+            //   ),
+            // ),
+            // const SizedBox(height: 4),
+            // Text(
+            //   '验证RNNoise FFI调用是否正常工作',
+            //   style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            //     color: Colors.grey[600],
+            //   ),
+            // ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: _isInitialized ? _generateNoisyTestAudio : null,
@@ -464,36 +525,27 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
               const SizedBox(height: 12),
               // 音频播放控制区域
               Text(
-                '音频播放对比',
+                '实时音频播放对比',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _audioManager.playRealtimeOriginal,
-                      icon: const Icon(Icons.record_voice_over),
-                      label: const Text('原始音频'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _audioManager.playRealtimeProcessed,
-                      icon: const Icon(Icons.volume_up),
-                      label: const Text('降噪音频'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+              SwitchListTile(
+                title: const Text('开启降噪 (实时流)'),
+                value: _audioManager.isDenoisingEnabledForStream,
+                onChanged: (bool value) {
+                  _audioManager.setDenoiseEnabledForStream(value);
+                  if (mounted) setState(() {});
+                },
+                activeColor: Colors.teal,
+              ),
+              ElevatedButton.icon(
+                onPressed: _hasRealtimeAudioFiles ? _audioManager.toggleStreamPlayback : null,
+                icon: Icon(_audioManager.isPlayingStream ? Icons.pause : Icons.play_arrow),
+                label: Text(_audioManager.isPlayingStream ? '暂停播放' : '播放实时音频'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _audioManager.isPlayingStream ? Colors.orange : Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -514,6 +566,149 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+  
+  /// 构建文件处理卡片
+  Widget _buildFileProcessingCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '音频文件降噪处理',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '选择本地WAV文件进行处理和播放',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // 文件选择按钮
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: (_isInitialized && !_audioManager.isFileProcessing) 
+                        ? _selectAndProcessAudioFile : null,
+                    icon: _audioManager.isFileProcessing 
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.folder_open),
+                    label: Text(_audioManager.isFileProcessing 
+                        ? '降噪处理中...' : '选择音频文件 (WAV)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            if (_selectedFileName != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.teal.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.audio_file, color: Colors.teal),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '已选择: $_selectedFileName',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.teal[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            
+            if (_hasSelectedAudioFiles) ...[
+              const SizedBox(height: 12),
+              Text(
+                '文件播放控制',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('播放时开启降噪'),
+                value: _audioManager.isDenoisingEnabledForFile,
+                onChanged: (bool value) {
+                  _audioManager.setDenoiseEnabledForFile(value);
+                  if (mounted) setState(() {});
+                },
+                activeColor: Colors.teal,
+              ),
+              ElevatedButton.icon(
+                onPressed: _hasSelectedAudioFiles 
+                    ? _audioManager.toggleFilePlayback 
+                    : null,
+                icon: Icon(_audioManager.isPlayingFile ? Icons.pause : Icons.play_arrow),
+                label: Text(_audioManager.isPlayingFile ? '暂停播放' : '播放选择文件'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _audioManager.isPlayingFile 
+                      ? Colors.orange 
+                      : Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+            
+            const SizedBox(height: 12),
+            
+            // 说明文字
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.teal.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '支持格式：',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '• WAV（当前唯一支持的格式）\n'
+                    '• MP3、M4A、AAC（暂不支持，请转换为WAV）\n'
+                    '• 推荐：16位PCM，48kHz采样率\n'
+                    '• 处理完成后可对比播放原始文件和降噪结果',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.teal[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
