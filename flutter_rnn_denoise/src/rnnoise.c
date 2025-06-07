@@ -294,10 +294,23 @@ int rnnoise_init(DenoiseState *st) {
     return 0;
 }
 
-DenoiseState *rnnoise_create() {
+DenoiseState *rnnoise_create(void *model) {
     DenoiseState *st;
     st = (DenoiseState*)malloc(rnnoise_get_size());
-    rnnoise_init(st);
+    if (st == NULL) {
+        return NULL;
+    }
+    
+    // 初始化所有状态到0（包括RNN状态）
+    int result = rnnoise_init(st);
+    if (result != 0) {
+        free(st);
+        return NULL;
+    }
+    
+    // 注意：RNN权重在rnn_data.c中定义为全局常量，会自动使用
+    // 不需要显式初始化，compute_rnn函数会直接引用这些权重
+    
     return st;
 }
 

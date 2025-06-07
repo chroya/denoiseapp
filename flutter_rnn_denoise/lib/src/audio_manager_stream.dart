@@ -409,34 +409,48 @@ class AudioManagerStream {
     // 初始化统一播放器
     await _player.setVolume(1.0);
     
-    // 设置播放状态监听器
-    _player.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
-        final bool wasPlayingStream = _isPlayingStream;
-        final bool wasPlayingFile = _isPlayingFile; // This line should already exist
+      // 设置播放状态监听器
+  _player.playerStateStream.listen((state) {
+    if (state.processingState == ProcessingState.completed) {
+      final bool wasPlayingStream = _isPlayingStream;
+      final bool wasPlayingFile = _isPlayingFile; // This line should already exist
 
-        _isPlayingStream = false;
-        _isPlayingFile = false; // This line should already exist
-
-        if (wasPlayingFile) { // This conditional block is what we're focusing on
-          _isFileProcessing = false; // <--- ****** ADD THIS LINE ******
-          print("File playback completed, _isFileProcessing set to false."); // Optional: for logging
+      _isPlayingStream = false;
+      
+      // 检查是否是渐进式播放模式，如果是则不要设置 _isPlayingFile = false
+      if (wasPlayingFile && !_useMemoryStreamPlayback) {
+        _isPlayingFile = false; // 只有非渐进式播放才设置为false
+      } else if (wasPlayingFile && _useMemoryStreamPlayback) {
+        // 渐进式播放模式：检查是否真的完成了所有内容
+        if (!_isChunkProcessingActive && _audioBufferQueue.isEmpty) {
+          _isPlayingFile = false;
+          _isFileProcessing = false;
+          print("Progressive playback truly completed - all chunks processed");
+        } else {
+          print("Progressive playback: ignoring intermediate completion event");
+          return; // 忽略中间的完成事件
         }
-        _currentPlayingFilePath = null; // This line should already exist
-        
-        if (wasPlayingStream) {
-          onStatusChanged?.call('实时音频播放完成');
-          print('实时音频播放完成');
-        }
-        if (wasPlayingFile) {
-          onStatusChanged?.call('文件音频播放完成');
-          print('文件音频播放完成');
-        }
-        onStateChanged?.call(); // This line should already exist
-      } else if (state.processingState == ProcessingState.ready && !state.playing) {
-        // Handle pause state if needed, or rely on explicit pause calls
       }
-    });
+
+      if (wasPlayingFile && !_isPlayingFile) { // 只有真正完成时才执行
+        _isFileProcessing = false;
+        print("File playback completed, _isFileProcessing set to false.");
+      }
+      _currentPlayingFilePath = null; // This line should already exist
+      
+      if (wasPlayingStream) {
+        onStatusChanged?.call('实时音频播放完成');
+        print('实时音频播放完成');
+      }
+      if (wasPlayingFile && !_isPlayingFile) {
+        onStatusChanged?.call('文件音频播放完成');
+        print('文件音频播放完成');
+      }
+      onStateChanged?.call(); // This line should already exist
+    } else if (state.processingState == ProcessingState.ready && !state.playing) {
+      // Handle pause state if needed, or rely on explicit pause calls
+    }
+  });
     _player.playingStream.listen((playing) {
         // This stream updates when player.play() or player.pause() is called.
         // We manage _isPlayingStream and _isPlayingFile in their respective toggle methods.
@@ -1721,71 +1735,155 @@ class AudioManagerStream {
     }
   }
 
-  /// 完全基于内存的音频流播放（收集所有chunks后播放）
+  /// 边处理边播放的渐进式内存流播放
   void _consumeAudioBuffersMemoryStream() async {
-    print("_consumeAudioBuffersMemoryStream: Starting pure memory collection playback");
+    print("_consumeAudioBuffersMemoryStream: Starting progressive streaming playback");
     
     List<int> completeAudioData = [];
-    bool hasStartedCollection = false;
+    bool hasStartedPlayback = false;
+    int chunksProcessedSinceLastUpdate = 0;
+    const int initialBatchSize = 3; // 初始批次：收集3个chunk再播放，确保足够长度
+    const int updateBatchSize = 2; // 后续更新：每2个chunk更新一次
+    Duration lastPlayPosition = Duration.zero;
     
-    // 等待所有chunks处理完成，然后一次性播放
+    // 渐进式播放：先播放初始数据，然后分批更新
     while (_isPlayingFile && !_stopFileChunkProcessingLoop) {
       if (_audioBufferQueue.isNotEmpty) {
         final audioData = _audioBufferQueue.removeFirst();
         
         try {
-          if (!hasStartedCollection) {
-            // 第一个块：完整WAV数据作为基础
+          if (!hasStartedPlayback) {
+            // 第一批：收集足够的初始数据再开始播放
             completeAudioData = audioData.toList();
-            hasStartedCollection = true;
-            print("_consumeAudioBuffersMemoryStream: Started collection with first chunk (${audioData.length} bytes)");
+            int initialBatchCount = 1;
+            _bufferPlaybackIndex++;
+            
+            print("_consumeAudioBuffersMemoryStream: Collecting initial batch, got chunk 1 (${audioData.length} bytes)");
+            
+            // 等待并收集初始批次的chunks
+            while (initialBatchCount < initialBatchSize) {
+              // 等待更多chunks
+              while (_audioBufferQueue.isEmpty && _isChunkProcessingActive) {
+                await Future.delayed(Duration(milliseconds: 50));
+                print("_consumeAudioBuffersMemoryStream: Waiting for chunk ${initialBatchCount + 1} for initial batch...");
+              }
+              
+              if (_audioBufferQueue.isNotEmpty) {
+                final nextChunk = _audioBufferQueue.removeFirst();
+                final pcmData = nextChunk.sublist(44);
+                completeAudioData.addAll(pcmData);
+                initialBatchCount++;
+                _bufferPlaybackIndex++;
+                print("_consumeAudioBuffersMemoryStream: Added chunk $initialBatchCount to initial batch (${nextChunk.length} bytes)");
+              } else if (!_isChunkProcessingActive) {
+                print("_consumeAudioBuffersMemoryStream: Processing completed, starting with available ${initialBatchCount} chunks");
+                break;
+              }
+            }
+            
+            // 开始播放初始批次
+            await _startProgressivePlayback(completeAudioData);
+            hasStartedPlayback = true;
+            chunksProcessedSinceLastUpdate = 0; // 重置计数器
+            print("_consumeAudioBuffersMemoryStream: Started progressive playback with $initialBatchCount chunks (${completeAudioData.length} bytes)");
           } else {
-            // 后续块：追加PCM数据到完整音频数据
-            final pcmData = audioData.sublist(44); // 跳过WAV头
+            // 后续块：累积到批次大小后更新
+            final pcmData = audioData.sublist(44);
             completeAudioData.addAll(pcmData);
-            print("_consumeAudioBuffersMemoryStream: Appended chunk ${_bufferPlaybackIndex} (${pcmData.length} bytes, total: ${completeAudioData.length} bytes)");
+            chunksProcessedSinceLastUpdate++;
+            _bufferPlaybackIndex++;
+            
+            print("_consumeAudioBuffersMemoryStream: Accumulated chunk ${_bufferPlaybackIndex} (${pcmData.length} bytes, batch: ${chunksProcessedSinceLastUpdate}/${updateBatchSize}, total: ${completeAudioData.length} bytes)");
+            
+            // 达到批次大小或者是最后一批，进行更新
+            if (chunksProcessedSinceLastUpdate >= updateBatchSize || 
+                (_audioBufferQueue.isEmpty && !_isChunkProcessingActive)) {
+              
+              await _updateProgressivePlayback(completeAudioData, lastPlayPosition);
+              chunksProcessedSinceLastUpdate = 0;
+              print("_consumeAudioBuffersMemoryStream: Updated playback with batch of $updateBatchSize chunks");
+            }
           }
           
-          _bufferPlaybackIndex++;
+          // 记录当前播放位置，用于恢复
+          if (_player.duration != null && _player.position.inMilliseconds > 0) {
+            lastPlayPosition = _player.position;
+          }
           
-          // 短暂延迟让处理继续
-          await Future.delayed(Duration(milliseconds: 10));
+          // 适当延迟，让播放器有时间处理
+          await Future.delayed(Duration(milliseconds: 30));
         } catch (e) {
-          print("Error collecting audio data: $e");
+          print("Error in progressive playback: $e");
         }
       } else {
         // 检查是否处理完成
-        if (!_isChunkProcessingActive && hasStartedCollection) {
-          print("_consumeAudioBuffersMemoryStream: All chunks collected, starting playback");
+        if (!_isChunkProcessingActive && hasStartedPlayback && chunksProcessedSinceLastUpdate > 0) {
+          // 处理剩余的chunks
+          await _updateProgressivePlayback(completeAudioData, lastPlayPosition);
+          print("_consumeAudioBuffersMemoryStream: Final update with remaining ${chunksProcessedSinceLastUpdate} chunks");
           break;
         }
-        // 等待新的缓冲数据或处理完成
-        await Future.delayed(Duration(milliseconds: 30));
+        // 等待新的缓冲数据
+        print("_consumeAudioBuffersMemoryStream: Waiting for more chunks... Queue size: ${_audioBufferQueue.length}, Processing active: $_isChunkProcessingActive, Playback started: $hasStartedPlayback, Chunks since update: $chunksProcessedSinceLastUpdate");
+        await Future.delayed(Duration(milliseconds: 100));
       }
     }
     
-    // 所有chunks收集完成，开始播放
-    if (hasStartedCollection && completeAudioData.isNotEmpty) {
-      try {
-        // 更新WAV头中的大小信息
-        final totalDataSize = completeAudioData.length - 44;
-        _updateWavHeaderInMemory(completeAudioData, totalDataSize);
-        
-        // 将完整音频数据转换为base64 data URI
-        final base64Audio = base64Encode(completeAudioData);
-        final dataUri = 'data:audio/wav;base64,$base64Audio';
-        
-        print("_consumeAudioBuffersMemoryStream: Setting complete audio data as source (${completeAudioData.length} bytes)");
-        await _player.setAudioSource(AudioSource.uri(Uri.parse(dataUri)));
+    print("_consumeAudioBuffersMemoryStream: Progressive streaming playback completed (Final queue size: ${_audioBufferQueue.length})");
+  }
+  
+  /// 开始渐进式播放
+  Future<void> _startProgressivePlayback(List<int> initialAudioData) async {
+    try {
+      // 更新WAV头
+      final totalDataSize = initialAudioData.length - 44;
+      _updateWavHeaderInMemory(initialAudioData, totalDataSize);
+      
+      // 转换为Data URI并开始播放
+      final base64Audio = base64Encode(initialAudioData);
+      final dataUri = 'data:audio/wav;base64,$base64Audio';
+      
+      await _player.setAudioSource(AudioSource.uri(Uri.parse(dataUri)));
+      await _player.play();
+      print("_startProgressivePlayback: Initial playback started (${initialAudioData.length} bytes)");
+    } catch (e) {
+      print("Error starting progressive playback: $e");
+      onError?.call("渐进式播放启动失败: $e");
+    }
+  }
+  
+  /// 更新渐进式播放
+  Future<void> _updateProgressivePlayback(List<int> updatedAudioData, Duration lastPosition) async {
+    try {
+      // 更新WAV头
+      final totalDataSize = updatedAudioData.length - 44;
+      _updateWavHeaderInMemory(updatedAudioData, totalDataSize);
+      
+      // 保存当前播放状态
+      final wasPlaying = _player.playing;
+      final currentPosition = _player.position;
+      
+      // 转换为新的Data URI
+      final base64Audio = base64Encode(updatedAudioData);
+      final dataUri = 'data:audio/wav;base64,$base64Audio';
+      
+      // 快速更新音频源
+      await _player.setAudioSource(AudioSource.uri(Uri.parse(dataUri)));
+      
+      // 恢复播放位置和状态
+      if (currentPosition.inMilliseconds > 0) {
+        await _player.seek(currentPosition);
+      }
+      
+      if (wasPlaying) {
         await _player.play();
-        print("_consumeAudioBuffersMemoryStream: Started playing complete denoised audio");
-      } catch (e) {
-        print("Error setting complete data URI source: $e");
-        onError?.call("完整音频播放设置失败: $e");
       }
+      
+      print("_updateProgressivePlayback: Updated audio source (${updatedAudioData.length} bytes) at position ${currentPosition.inSeconds}s");
+    } catch (e) {
+      print("Error updating progressive playback: $e");
+      // 如果更新失败，尝试继续播放原有内容
     }
-    
-    print("_consumeAudioBuffersMemoryStream: Pure memory collection playback completed");
   }
 
   /// 在内存中更新WAV文件头
@@ -1928,6 +2026,7 @@ class AudioManagerStream {
     }
   }
 } 
+
 
 
 

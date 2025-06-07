@@ -22,8 +22,22 @@ int rnnoise_init_state() {
         rnnoise_destroy(g_denoise_state);
     }
     
+    // 使用NULL参数创建状态，这会使用默认的内置模型
     g_denoise_state = rnnoise_create(NULL);
-    return g_denoise_state != NULL ? 0 : -1;
+    if (g_denoise_state == NULL) {
+        return -1;
+    }
+    
+    // 验证状态是否正确初始化
+    // 通过调用rnnoise_init确保所有内部状态正确设置
+    int result = rnnoise_init(g_denoise_state);
+    if (result != 0) {
+        rnnoise_destroy(g_denoise_state);
+        g_denoise_state = NULL;
+        return -1;
+    }
+    
+    return 0;
 }
 
 // 销毁降噪状态
