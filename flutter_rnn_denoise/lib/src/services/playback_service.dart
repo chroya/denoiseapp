@@ -75,7 +75,7 @@ class PlaybackService {
       print("[PlaybackService] Audio session configured successfully");
     } catch (e) {
       print("[PlaybackService] Error configuring audio session: $e");
-      onError?.call("Audio configuration failed: $e");
+      onError?.call("音频配置失败: $e");
     }
   }
 
@@ -104,7 +104,7 @@ class PlaybackService {
       
     } catch (e) {
       print("[PlaybackService] Error playing file: $e");
-      onError?.call("Failed to play file: $e");
+      onError?.call("播放文件失败: $e");
       await _player.stop();
     }
   }
@@ -153,7 +153,7 @@ class PlaybackService {
           }
         } catch (e) {
           print("[PlaybackService] Error handling WAV chunk: $e");
-          onError?.call("Error handling WAV chunk: $e");
+          onError?.call("处理音频数据失败: $e");
           await _player.stop();
         }
       },
@@ -168,7 +168,7 @@ class PlaybackService {
       },
       onError: (e) {
         print("[PlaybackService] Error in WAV stream: $e");
-        onError?.call("Error in audio stream: $e");
+        onError?.call("音频流错误: $e");
         _player.stop();
       }
     );
@@ -199,11 +199,17 @@ class PlaybackService {
   Future<void> pause() async {
     print("[PlaybackService] pause called");
     await _player.pause();
+    // Add a small delay to ensure the pause state is properly registered
+    await Future.delayed(Duration(milliseconds: 50));
+    print("[PlaybackService] pause completed - Playing: ${_player.playing}");
   }
 
   Future<void> resume() async {
     print("[PlaybackService] resume called");
     await _player.play();
+    // Add a small delay to ensure the play state is properly registered
+    await Future.delayed(Duration(milliseconds: 50));
+    print("[PlaybackService] resume completed - Playing: ${_player.playing}");
   }
 
   Future<void> stop() async {

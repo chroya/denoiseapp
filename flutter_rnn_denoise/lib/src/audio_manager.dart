@@ -109,14 +109,14 @@ class AudioManager {
       onStatusChanged?.call('Ready.');
       onStateChanged?.call();
     } catch (e) {
-      onError?.call('Initialization Failed: $e');
+      onError?.call('初始化失败: $e');
       rethrow;
     }
   }
 
   void _setupCallbacks() {
     _playbackService.onStateChanged = _notifyStateChange;
-    _playbackService.onError = (error) => onError?.call("Playback Error: $error");
+    _playbackService.onError = (error) => onStatusChanged?.call("播放错误: $error");
     _playbackService.onPlaybackComplete = () {
        _playbackState = PlaybackState.stopped;
        _currentPlaybackMode = null;
@@ -643,63 +643,69 @@ class AudioManager {
     _notifyStateChange();
   }
 
+  bool _isToggling = false; // Add flag to prevent concurrent toggles
+  
   Future<void> toggleFilePlayback() async {
     print("[AudioManager] toggleFilePlayback called - current state: $_playbackState, mode: $_currentPlaybackMode");
     
     if (_selectedFilePath == null) {
       print("[AudioManager] No file selected");
-      onError?.call("Please select a file first.");
+      onStatusChanged?.call("请先选择音频文件");
       return;
     }
 
     // Check if file processing is already in progress
     if (_fileProcessingService.isProcessing) {
       print("[AudioManager] File processing already in progress, ignoring click");
-      onError?.call("File is already being processed, please wait.");
+      onStatusChanged?.call("正在处理音频，请稍候...");
       return;
     }
 
-    if (_currentPlaybackMode == PlaybackMode.stream) {
-      print("[AudioManager] Switching from stream mode, stopping first");
-      await stop();
-    }
-    _currentPlaybackMode = PlaybackMode.file;
-
-    if (_playbackState == PlaybackState.playing) {
-      print("[AudioManager] Currently playing, pausing");
-      await _playbackService.pause();
-      _playbackState = PlaybackState.paused;
-      onStatusChanged?.call('Paused');
-    } else if (_playbackState == PlaybackState.paused) {
-      print("[AudioManager] Currently paused, resuming");
-      await _playbackService.resume();
-      _playbackState = PlaybackState.playing;
-      onStatusChanged?.call('Playing');
-    } else { // Was stopped
-      print("[AudioManager] Starting new playback - denoising enabled: $_isDenoisingEnabled");
-      _playbackState = PlaybackState.playing;
-      onStatusChanged?.call('Starting file playback...');
-      _notifyStateChange();
-
-      try {
-        if (_isDenoisingEnabled) {
-          print("[AudioManager] Starting denoised playback for: $_selectedFilePath");
-          final denoisedStream = _fileProcessingService.processFile(_selectedFilePath!);
-          _playbackSubscription = _playbackService.playWavStream(denoisedStream);
-        } else {
-          print("[AudioManager] Starting direct file playback for: $_selectedFilePath");
-          await _playbackService.playFile(_selectedFilePath!);
-        }
-        print("[AudioManager] Playback started successfully");
-      } catch (e) {
-        print("[AudioManager] Error starting playback: $e");
-        _playbackState = PlaybackState.stopped;
-        onError?.call("Failed to start playback: $e");
-        _notifyStateChange();
-        return;
+    // Reset toggle flag for debugging
+    _isToggling = false;
+      if (_currentPlaybackMode == PlaybackMode.stream) {
+        print("[AudioManager] Switching from stream mode, stopping first");
+        await stop();
       }
-    }
-    _notifyStateChange();
+      _currentPlaybackMode = PlaybackMode.file;
+
+        if (_playbackState == PlaybackState.playing) {
+        print("[AudioManager] Currently playing, pausing");
+        await _playbackService.pause();
+        _playbackState = PlaybackState.paused;
+        onStatusChanged?.call('Paused');
+        _notifyStateChange();
+      } else if (_playbackState == PlaybackState.paused) {
+        print("[AudioManager] Currently paused, resuming");
+        await _playbackService.resume();
+        _playbackState = PlaybackState.playing;
+        onStatusChanged?.call('Playing');
+        _notifyStateChange();
+      } else { // Was stopped
+        print("[AudioManager] Starting new playback - denoising enabled: $_isDenoisingEnabled");
+        _playbackState = PlaybackState.playing;
+        onStatusChanged?.call('Starting file playback...');
+        _notifyStateChange();
+
+        try {
+          if (_isDenoisingEnabled) {
+            print("[AudioManager] Starting denoised playback for: $_selectedFilePath");
+            final denoisedStream = _fileProcessingService.processFile(_selectedFilePath!);
+            _playbackSubscription = _playbackService.playWavStream(denoisedStream);
+          } else {
+            print("[AudioManager] Starting direct file playback for: $_selectedFilePath");
+            await _playbackService.playFile(_selectedFilePath!);
+          }
+          print("[AudioManager] Playback started successfully");
+        } catch (e) {
+          print("[AudioManager] Error starting playback: $e");
+          _playbackState = PlaybackState.stopped;
+          onStatusChanged?.call("播放失败: ${e.toString()}");
+          _notifyStateChange();
+          return;
+        }
+      }
+      _notifyStateChange();
   }
   
   Future<void> stop() async {
