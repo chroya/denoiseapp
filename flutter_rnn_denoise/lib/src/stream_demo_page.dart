@@ -74,7 +74,7 @@ class _StreamDemoPageState extends State<StreamDemoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('模块化音频处理器'),
+        title: const Text('实时音频降噪'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(

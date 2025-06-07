@@ -97,7 +97,7 @@ class HomePage extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.stream),
-              label: const Text('实时流式处理'),
+              label: const Text('实时音频降噪'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.all(16),
                 backgroundColor: Colors.green,
