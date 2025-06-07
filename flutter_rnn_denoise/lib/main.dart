@@ -72,22 +72,22 @@ class HomePage extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const DenoisePage()),
-                );
-              },
-              icon: const Icon(Icons.audiotrack),
-              label: const Text('文件处理模式'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-            ),
+            // const SizedBox(height: 32),
+            // ElevatedButton.icon(
+            //   onPressed: () {
+            //     Navigator.push(
+            //       context,
+            //       MaterialPageRoute(builder: (context) => const DenoisePage()),
+            //     );
+            //   },
+            //   icon: const Icon(Icons.audiotrack),
+            //   label: const Text('文件处理模式'),
+            //   style: ElevatedButton.styleFrom(
+            //     padding: const EdgeInsets.all(16),
+            //     backgroundColor: Colors.blue,
+            //     foregroundColor: Colors.white,
+            //   ),
+            // ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {

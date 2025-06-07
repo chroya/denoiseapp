@@ -9,6 +9,14 @@ import 'package:path/path.dart' as path_helper;
 import 'package:record/record.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'rnnoise_ffi.dart';
+import 'package:flutter_rnn_denoise/src/services/file_processing_service.dart';
+
+import 'services/denoise_service.dart';
+import 'services/playback_service.dart';
+import 'services/recording_service.dart';
+
+enum PlaybackMode { file, stream }
+enum PlaybackState { playing, paused, stopped }
 
 /// 音频管理器类，负责录音和播放
 class AudioManager {
@@ -49,67 +57,83 @@ class AudioManager {
   bool get isPlayingProcessed => _isPlayingProcessed;
   bool get isRealTimeEnabled => _isRealTimeEnabled;
   
+  // --- Services ---
+  late DenoiseService _denoiseService;
+  late PlaybackService _playbackService;
+  late RecordingService _recordingService;
+  late FileProcessingService _fileProcessingService;
+  
+  // --- State ---
+  bool _isInitialized = false;
+  PlaybackState _playbackState = PlaybackState.stopped;
+  PlaybackMode? _currentPlaybackMode;
+  bool _isDenoisingEnabled = false;
+  String? _selectedFilePath;
+  StreamSubscription? _playbackSubscription;
+  
+  // --- Callbacks for UI ---
+  Function()? onStateChanged;
+  Function(String)? onStatusChanged;
+  Function(String)? onError;
+  
+  // --- Getters for UI ---
+  bool get isInitialized => _isInitialized;
+  PlaybackState get playbackState => _playbackState;
+  bool get isDenoisingEnabled => _isDenoisingEnabled;
+  String? get selectedFileName => _selectedFilePath != null ? path_helper.basename(_selectedFilePath!) : null;
+  
   /// 初始化音频管理器
   Future<void> initialize() async {
-    // 先请求权限
-    await _requestPermissions();
-    
-    // 初始化路径
-    await _initializePaths();
-    
-    // 初始化录音器和播放器
-    await _initializeAudioSession();
-    await _initializeRecorder();
-    await _initializePlayers();
+    if (_isInitialized) return;
+
+    try {
+      onStatusChanged?.call('Initializing...');
+      await _requestPermissions();
+      
+      final directory = await getApplicationDocumentsDirectory();
+      _appDir = directory.path;
+
+      await _initializeRNNoise();
+      
+      // Initialize services
+      _denoiseService = DenoiseService(_rnnoise);
+      _playbackService = PlaybackService();
+      _recordingService = RecordingService(_appDir);
+      _fileProcessingService = FileProcessingService(_denoiseService, _appDir);
+
+      _setupCallbacks();
+
+      await _initializeAudioSession();
+      
+      _isInitialized = true;
+      onStatusChanged?.call('Ready.');
+      onStateChanged?.call();
+    } catch (e) {
+      onError?.call('Initialization Failed: $e');
+      rethrow;
+    }
   }
-  
+
+  void _setupCallbacks() {
+    _playbackService.onStateChanged = _notifyStateChange;
+    _playbackService.onError = (error) => onError?.call("Playback Error: $error");
+    _playbackService.onPlaybackComplete = () {
+       _playbackState = PlaybackState.stopped;
+       _currentPlaybackMode = null;
+       onStatusChanged?.call('Playback Complete.');
+       _notifyStateChange();
+    };
+  }
+
   /// 请求所需权限
   Future<void> _requestPermissions() async {
-    // 请求麦克风权限
-    final micStatus = await Permission.microphone.request();
-    if (micStatus != PermissionStatus.granted) {
-      throw Exception('需要麦克风权限才能录音');
+    if (await Permission.microphone.request() != PermissionStatus.granted) {
+      throw Exception('Microphone permission not granted');
     }
-    
-    // 请求存储权限（Android需要）
+
     if (Platform.isAndroid) {
-      // 检测Android版本
-      bool isAndroid13OrHigher = false;
-      bool isAndroid11OrHigher = false;
-      try {
-        final sdkVersion = int.parse(Platform.operatingSystemVersion.split(' ').last);
-        isAndroid13OrHigher = sdkVersion >= 33;
-        isAndroid11OrHigher = sdkVersion >= 30;
-      } catch (e) {
-        // 解析失败，假设是较低版本
-        isAndroid13OrHigher = true;
-        isAndroid11OrHigher = true;
-      }
-      
-      if (isAndroid13OrHigher) {
-        // Android 13及以上版本使用媒体权限
-        final audioStatus = await Permission.audio.request();
-        if (audioStatus != PermissionStatus.granted) {
-          throw Exception('需要音频访问权限才能保存录音');
-        }
-      } else if (isAndroid11OrHigher) {
-        // Android 11及以上版本使用MANAGE_EXTERNAL_STORAGE权限
-        if (!await Permission.manageExternalStorage.isGranted) {
-          final status = await Permission.manageExternalStorage.request();
-          if (status != PermissionStatus.granted) {
-            // 如果权限未授予，引导用户到设置页面
-            if (await Permission.manageExternalStorage.isPermanentlyDenied) {
-              await openAppSettings();
-            }
-            throw Exception('需要文件管理权限才能保存录音');
-          }
-        }
-      } else {
-        // Android 10及以下版本使用传统存储权限
-        final storageStatus = await Permission.storage.request();
-        if (storageStatus != PermissionStatus.granted) {
-          throw Exception('需要存储权限才能保存录音');
-        }
+      if (await Permission.audio.request() != PermissionStatus.granted) {
+        throw Exception('Audio permission not granted. This is required to select and process audio files.');
       }
     }
   }
@@ -576,5 +600,119 @@ class AudioManager {
       await _playerProcessed.closePlayer();
       _isPlayerProcessedInitialized = false;
     }
+
+    await stop();
+    _rnnoise.cleanupState();
+    await _playbackService.dispose();
+    await _recordingService.dispose();
+    _isInitialized = false;
+    onStatusChanged?.call('Disposed.');
+    _notifyStateChange();
+  }
+
+  void _notifyStateChange() {
+    onStateChanged?.call();
+  }
+
+  Future<void> _initializeRNNoise() async {
+    if (!_rnnoise.isLibraryLoaded) {
+      throw Exception('RNNoise library not loaded');
+    }
+    if (!_rnnoise.initializeState()) {
+      throw Exception('Failed to initialize RNNoise state');
+    }
+  }
+
+  void setDenoise(bool isEnabled) {
+    if (_isDenoisingEnabled == isEnabled) return;
+    _isDenoisingEnabled = isEnabled;
+    onStatusChanged?.call('Denoising ${isEnabled ? "Enabled" : "Disabled"}');
+    
+    // If playback is active, stop it to apply the new setting
+    if (_playbackState != PlaybackState.stopped) {
+      stop();
+      onStatusChanged?.call('Restart playback to apply changes.');
+    }
+    _notifyStateChange();
+  }
+
+  Future<void> selectFile(String path) async {
+    await stop();
+    _selectedFilePath = path;
+    onStatusChanged?.call('Selected: ${selectedFileName}');
+    _notifyStateChange();
+  }
+
+  Future<void> toggleFilePlayback() async {
+    print("[AudioManager] toggleFilePlayback called - current state: $_playbackState, mode: $_currentPlaybackMode");
+    
+    if (_selectedFilePath == null) {
+      print("[AudioManager] No file selected");
+      onError?.call("Please select a file first.");
+      return;
+    }
+
+    // Check if file processing is already in progress
+    if (_fileProcessingService.isProcessing) {
+      print("[AudioManager] File processing already in progress, ignoring click");
+      onError?.call("File is already being processed, please wait.");
+      return;
+    }
+
+    if (_currentPlaybackMode == PlaybackMode.stream) {
+      print("[AudioManager] Switching from stream mode, stopping first");
+      await stop();
+    }
+    _currentPlaybackMode = PlaybackMode.file;
+
+    if (_playbackState == PlaybackState.playing) {
+      print("[AudioManager] Currently playing, pausing");
+      await _playbackService.pause();
+      _playbackState = PlaybackState.paused;
+      onStatusChanged?.call('Paused');
+    } else if (_playbackState == PlaybackState.paused) {
+      print("[AudioManager] Currently paused, resuming");
+      await _playbackService.resume();
+      _playbackState = PlaybackState.playing;
+      onStatusChanged?.call('Playing');
+    } else { // Was stopped
+      print("[AudioManager] Starting new playback - denoising enabled: $_isDenoisingEnabled");
+      _playbackState = PlaybackState.playing;
+      onStatusChanged?.call('Starting file playback...');
+      _notifyStateChange();
+
+      try {
+        if (_isDenoisingEnabled) {
+          print("[AudioManager] Starting denoised playback for: $_selectedFilePath");
+          final denoisedStream = _fileProcessingService.processFile(_selectedFilePath!);
+          _playbackSubscription = _playbackService.playWavStream(denoisedStream);
+        } else {
+          print("[AudioManager] Starting direct file playback for: $_selectedFilePath");
+          await _playbackService.playFile(_selectedFilePath!);
+        }
+        print("[AudioManager] Playback started successfully");
+      } catch (e) {
+        print("[AudioManager] Error starting playback: $e");
+        _playbackState = PlaybackState.stopped;
+        onError?.call("Failed to start playback: $e");
+        _notifyStateChange();
+        return;
+      }
+    }
+    _notifyStateChange();
+  }
+  
+  Future<void> stop() async {
+    print("[AudioManager] stop called");
+    _fileProcessingService.stopProcessing();
+    await _playbackSubscription?.cancel();
+    _playbackSubscription = null;
+    await _playbackService.stop();
+    
+    _playbackState = PlaybackState.stopped;
+    _currentPlaybackMode = null;
+    onStatusChanged?.call('Stopped');
+    _notifyStateChange();
+    print("[AudioManager] stop completed");
   }
 }

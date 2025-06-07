@@ -12,10 +12,7 @@ import 'package:record/record.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'rnnoise_ffi.dart';
 import 'audio_stream_processor.dart';
-  import 'dart:math' as math;
-
-
-
+import 'dart:math' as math;
 
 /// 流式音频管理器类，支持实时降噪处理
 class AudioManagerStream {
@@ -68,7 +65,6 @@ class AudioManagerStream {
   // 双缓冲机制相关
   final Queue<Uint8List> _audioBufferQueue = Queue<Uint8List>(); // 内存音频缓冲队列
   final int _maxBufferQueueSize = 5; // 最大缓冲5秒音频
-  bool _isBuffering = false;
   int _bufferPlaybackIndex = 0;
   
   // 优化播放相关
@@ -409,71 +405,65 @@ class AudioManagerStream {
     // 初始化统一播放器
     await _player.setVolume(1.0);
     
-      // 设置播放状态监听器
-  _player.playerStateStream.listen((state) {
-    if (state.processingState == ProcessingState.completed) {
-      final bool wasPlayingStream = _isPlayingStream;
-      final bool wasPlayingFile = _isPlayingFile; // This line should already exist
+    // 设置播放状态监听器
+    _player.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        final bool wasPlayingStream = _isPlayingStream;
+        final bool wasPlayingFile = _isPlayingFile;
 
-      _isPlayingStream = false;
-      
-      // 检查是否是渐进式播放模式，如果是则不要设置 _isPlayingFile = false
-      if (wasPlayingFile && !_useMemoryStreamPlayback) {
-        _isPlayingFile = false; // 只有非渐进式播放才设置为false
-      } else if (wasPlayingFile && _useMemoryStreamPlayback) {
-        // 渐进式播放模式：检查是否真的完成了所有内容
-        if (!_isChunkProcessingActive && _audioBufferQueue.isEmpty) {
-          _isPlayingFile = false;
-          _isFileProcessing = false;
-          print("Progressive playback truly completed - all chunks processed");
-        } else {
-          print("Progressive playback: ignoring intermediate completion event");
-          return; // 忽略中间的完成事件
+        _isPlayingStream = false;
+        
+        // 检查是否是渐进式播放模式，如果是则不要设置 _isPlayingFile = false
+        if (wasPlayingFile && !_useMemoryStreamPlayback) {
+          _isPlayingFile = false; // 只有非渐进式播放才设置为false
+        } else if (wasPlayingFile && _useMemoryStreamPlayback) {
+          // 渐进式播放模式：检查是否真的完成了所有内容
+          if (!_isChunkProcessingActive && _audioBufferQueue.isEmpty) {
+            _isPlayingFile = false;
+            _isFileProcessing = false;
+            print("Progressive playback truly completed - all chunks processed");
+          } else {
+            print("Progressive playback: ignoring intermediate completion event");
+            return; // 忽略中间的完成事件
+          }
         }
-      }
 
-      if (wasPlayingFile && !_isPlayingFile) { // 只有真正完成时才执行
-        _isFileProcessing = false;
-        print("File playback completed, _isFileProcessing set to false.");
+        if (wasPlayingFile && !_isPlayingFile) { // 只有真正完成时才执行
+          _isFileProcessing = false;
+          print("File playback completed, _isFileProcessing set to false.");
+        }
+        _currentPlayingFilePath = null;
+        
+        if (wasPlayingStream) {
+          onStatusChanged?.call('实时音频播放完成');
+          print('实时音频播放完成');
+        }
+        if (wasPlayingFile && !_isPlayingFile) {
+          onStatusChanged?.call('文件音频播放完成');
+          print('文件音频播放完成');
+        }
+        onStateChanged?.call();
+      } else if (state.processingState == ProcessingState.ready && !state.playing) {
+        // Handle pause state if needed, or rely on explicit pause calls
       }
-      _currentPlayingFilePath = null; // This line should already exist
-      
-      if (wasPlayingStream) {
-        onStatusChanged?.call('实时音频播放完成');
-        print('实时音频播放完成');
-      }
-      if (wasPlayingFile && !_isPlayingFile) {
-        onStatusChanged?.call('文件音频播放完成');
-        print('文件音频播放完成');
-      }
-      onStateChanged?.call(); // This line should already exist
-    } else if (state.processingState == ProcessingState.ready && !state.playing) {
-      // Handle pause state if needed, or rely on explicit pause calls
-    }
-  });
+    });
     _player.playingStream.listen((playing) {
-        // This stream updates when player.play() or player.pause() is called.
-        // We manage _isPlayingStream and _isPlayingFile in their respective toggle methods.
-        // However, if an external event stops playback (e.g. another app takes audio focus),
-        // this `playing` status might become false.
-        if (_isExpectedPlayerStop) { // If we expected the player to stop (e.g., user pressed pause/stop)
-            _isExpectedPlayerStop = false; // Reset the flag
+        if (_isExpectedPlayerStop) { 
+            _isExpectedPlayerStop = false;
             print("Player stopped as expected. Ignoring playingStream update for this event.");
-            return; // Do not proceed with the unexpected stop logic
+            return;
         }
 
         if (!playing && (_isPlayingStream || _isPlayingFile)) {
-            // If player stops unexpectedly
             print("Player stopped unexpectedly. Updating state.");
             _isPlayingStream = false;
             _isPlayingFile = false;
-            _isFileProcessing = false; // Also reset processing state if it was active
+            _isFileProcessing = false;
             _currentPlayingFilePath = null;
             onStateChanged?.call();
         }
     });
 
-    // _isPlayerInitialized = true; // 不再需要单独的标志
     print('统一播放器 just_audio 初始化完成');
   }
   
@@ -490,23 +480,18 @@ class AudioManagerStream {
     }
     
     try {
-      // 清空缓冲区
       _rawAudioBuffer.clear();
       _processedAudioBuffer.clear();
       _originalAudioBuffer.clear();
       _completeProcessedAudio.clear();
       _completeOriginalAudio.clear();
       
-      // 创建音频流控制器
       _audioStreamController = StreamController<Uint8List>.broadcast();
-      
-      // 监听音频数据流
       _setupAudioStreamProcessing();
       
-      // 开始录音并获取音频流
       await _recorder.start(
         const RecordConfig(
-          encoder: AudioEncoder.wav,  // 使用WAV格式确保兼容性
+          encoder: AudioEncoder.wav,
           sampleRate: SAMPLE_RATE,
           numChannels: 1,
           bitRate: 16,
@@ -514,13 +499,11 @@ class AudioManagerStream {
         path: _recordingPath,
       );
       
-      // 启动音频流读取
       await _startAudioStreamReading();
       
       _isStreamProcessing = true;
       _isRecording = true;
       
-      // 启动音频保存定时器
       _startAudioSaveTimer();
       
       onStatusChanged?.call('开始实时流处理');
@@ -532,7 +515,6 @@ class AudioManagerStream {
     }
   }
 
-  /// 设置音频流处理
   void _setupAudioStreamProcessing() {
     _audioDataSubscription = _audioStreamController!.stream.listen(
       (audioData) {
@@ -544,24 +526,18 @@ class AudioManagerStream {
     );
   }
 
-  /// 启动音频流读取（从录音文件读取真实音频数据）
   Future<void> _startAudioStreamReading() async {
-    // 重置读取位置
-    _audioFileReadPosition = 44; // 跳过WAV文件头
+    _audioFileReadPosition = 44;
     
-    // 每100ms读取一次录音文件的新数据
     _audioReadTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) async {
       if (!_isStreamProcessing) {
         timer.cancel();
         return;
       }
-      
-      // 从录音文件读取新的音频数据
       await _readAudioDataFromFile();
     });
   }
 
-  /// 从录音文件读取音频数据
   Future<void> _readAudioDataFromFile() async {
     try {
       final file = File(_recordingPath);
@@ -571,14 +547,11 @@ class AudioManagerStream {
       
       final fileBytes = await file.readAsBytes();
       
-      // WAV文件最小应该有44字节的文件头
       if (fileBytes.length <= 44) {
         return;
       }
       
-      // 首次读取时，检查WAV文件头并找到数据开始位置
       if (_audioFileReadPosition == 44) {
-        // 简单验证是否为WAV文件
         final riffHeader = String.fromCharCodes(fileBytes.sublist(0, 4));
         final waveHeader = String.fromCharCodes(fileBytes.sublist(8, 12));
         
@@ -586,14 +559,12 @@ class AudioManagerStream {
           print('警告：文件可能不是有效的WAV格式');
         }
         
-        // 查找数据块开始位置
-        int dataStart = 44; // 标准WAV文件头大小
+        int dataStart = 44;
         
-        // 更精确地查找"data"块
         for (int i = 12; i < fileBytes.length - 8; i += 4) {
           final chunkId = String.fromCharCodes(fileBytes.sublist(i, i + 4));
           if (chunkId == 'data') {
-            dataStart = i + 8; // 跳过"data"标识和大小字段
+            dataStart = i + 8;
             break;
           }
         }
@@ -602,21 +573,18 @@ class AudioManagerStream {
         print('WAV文件数据开始位置: $dataStart');
       }
       
-      // 如果文件太小（没有新数据），跳过
       if (fileBytes.length <= _audioFileReadPosition) {
         return;
       }
       
-      // 计算要读取的字节数（每次读取约100ms的音频数据）
-      const samplesToRead = SAMPLE_RATE ~/ 10; // 100ms的样本数
-      const bytesToRead = samplesToRead * 2; // 16位PCM，每样本2字节
+      const samplesToRead = SAMPLE_RATE ~/ 10;
+      const bytesToRead = samplesToRead * 2;
       final endPos = math.min(_audioFileReadPosition + bytesToRead, fileBytes.length);
       
       if (endPos <= _audioFileReadPosition) {
         return;
       }
       
-      // 确保读取的字节数是偶数（16位样本需要2字节对齐）
       final actualBytesToRead = ((endPos - _audioFileReadPosition) ~/ 2) * 2;
       final actualEndPos = _audioFileReadPosition + actualBytesToRead;
       
@@ -624,11 +592,9 @@ class AudioManagerStream {
         return;
       }
       
-      // 读取音频数据
       final audioBytes = fileBytes.sublist(_audioFileReadPosition, actualEndPos);
       _audioFileReadPosition = actualEndPos;
       
-      // 发送音频数据到处理流
       if (audioBytes.isNotEmpty) {
         _audioStreamController?.add(Uint8List.fromList(audioBytes));
       }
@@ -638,70 +604,36 @@ class AudioManagerStream {
     }
   }
 
-  /// 生成音频帧数据（备用方法，当无法读取真实数据时使用）
-  Uint8List _generateAudioFrame() {
-    // 生成480个样本的音频数据（16位PCM）
-    final samples = Int16List(FRAME_SIZE);
-    
-    for (int i = 0; i < FRAME_SIZE; i++) {
-      // 生成包含噪声的测试信号
-      final t = DateTime.now().millisecondsSinceEpoch / 1000.0 + i / SAMPLE_RATE;
-      final signal = math.sin(2 * math.pi * 440 * t) * 0.5; // 440Hz正弦波
-      final noise = (math.Random().nextDouble() - 0.5) * 0.1; // 噪声
-      final sample = ((signal + noise) * 16384).clamp(-32768, 32767);
-      samples[i] = sample.round();
-    }
-    
-    return samples.buffer.asUint8List();
-  }
-
-  /// 处理音频流数据
   void _processAudioStreamData(Uint8List audioData) {
     try {
-      // 将字节数据转换为16位PCM样本
       final samples = Int16List.view(audioData.buffer);
-      
-      // 添加到原始音频缓冲区
       _rawAudioBuffer.addAll(samples);
       
-      // 当有足够数据时处理一帧
       while (_rawAudioBuffer.length >= FRAME_SIZE) {
-        // 提取一帧数据
         final frameData = _rawAudioBuffer.take(FRAME_SIZE).toList();
         _rawAudioBuffer.removeRange(0, FRAME_SIZE);
         
-        // 转换为Float32List
         final inputFrame = Float32List(FRAME_SIZE);
         for (int i = 0; i < FRAME_SIZE; i++) {
-          inputFrame[i] = frameData[i] / 32768.0; // 归一化到-1~1
+          inputFrame[i] = frameData[i] / 32768.0;
         }
         
-        // 调用FFI进行降噪处理
         final result = _rnnoise.processFrames(inputFrame, 1);
         
-        // 添加调试信息，验证FFI是否真正在工作
-        final inputRMS = _calculateRMS(inputFrame);
-        final outputRMS = _calculateRMS(result.processedAudio);
-        final vadProb = result.vadProbability;
-        
-        // 每处理100帧打印一次详细信息
         if (_completeProcessedAudio.length % 100 == 0) {
+          final inputRMS = _calculateRMS(inputFrame);
+          final outputRMS = _calculateRMS(result.processedAudio);
           print('FFI处理验证 - 帧数: ${_completeProcessedAudio.length}, '
                 '输入RMS: ${inputRMS.toStringAsFixed(4)}, '
                 '输出RMS: ${outputRMS.toStringAsFixed(4)}, '
-                'VAD概率: ${vadProb.toStringAsFixed(3)}, '
-                '音频变化: ${(outputRMS/inputRMS).toStringAsFixed(3)}');
+                'VAD概率: ${result.vadProbability.toStringAsFixed(3)}');
         }
         
-        // 保存到实时缓冲区（用于实时显示）
         _originalAudioBuffer.add(inputFrame);
         _processedAudioBuffer.add(result.processedAudio);
-        
-        // 同时保存到完整音频缓冲区（用于最终播放）
         _completeOriginalAudio.add(Float32List.fromList(inputFrame));
         _completeProcessedAudio.add(Float32List.fromList(result.processedAudio));
         
-        // 限制实时缓冲区大小（只影响实时显示，不影响完整音频）
         if (_originalAudioBuffer.length > _maxBufferSize) {
           _originalAudioBuffer.removeAt(0);
         }
@@ -709,11 +641,10 @@ class AudioManagerStream {
           _processedAudioBuffer.removeAt(0);
         }
         
-        // 通知处理结果
         final processResult = AudioProcessResult(
           processedAudio: result.processedAudio,
           vadProbability: result.vadProbability,
-          framesProcessed: _completeProcessedAudio.length, // 使用完整音频的帧数
+          framesProcessed: _completeProcessedAudio.length,
           timestamp: DateTime.now(),
         );
         
@@ -725,31 +656,20 @@ class AudioManagerStream {
     }
   }
   
-  /// 停止实时流处理
   Future<void> stopStreamProcessing() async {
     if (!_isStreamProcessing) return;
     
     try {
-      // 停止录音
       await _recorder.stop();
-      
-      // 停止音频读取定时器
       _audioReadTimer?.cancel();
       _audioReadTimer = null;
-      
-      // 取消音频流订阅
       await _audioDataSubscription?.cancel();
       _audioDataSubscription = null;
-      
-      // 关闭音频流控制器
       await _audioStreamController?.close();
       _audioStreamController = null;
-      
-      // 停止定时器
       _audioSaveTimer?.cancel();
       _audioSaveTimer = null;
       
-      // 如果正在播放实时流，则停止播放
       if (_isPlayingStream) {
         _isExpectedPlayerStop = true;
         await _player.stop();
@@ -760,10 +680,7 @@ class AudioManagerStream {
       _isStreamProcessing = false;
       _isRecording = false;
       
-      // 保存最终的音频文件
       await _saveFinalAudioFiles();
-      
-      // 分析音频处理效果
       _analyzeAudioDifference();
       
       onStatusChanged?.call('停止实时流处理');
@@ -775,18 +692,15 @@ class AudioManagerStream {
     }
   }
 
-  /// 保存最终音频文件
   Future<void> _saveFinalAudioFiles() async {
     if (_completeProcessedAudio.isEmpty || _completeOriginalAudio.isEmpty) {
       return;
     }
     
     try {
-      // 合并所有音频帧（使用完整的音频数据）
       final processedAudio = _mergeAudioFrames(_completeProcessedAudio);
       final originalAudio = _mergeAudioFrames(_completeOriginalAudio);
       
-      // 保存为WAV文件
       await _saveAudioAsWav(processedAudio, _realtimeProcessedPath);
       await _saveAudioAsWav(originalAudio, _realtimeOriginalPath);
       
@@ -797,7 +711,6 @@ class AudioManagerStream {
     }
   }
 
-  /// 开始录音（不处理）
   Future<void> startRecording() async {
     if (!_isInitialized || !_isRecorderInitialized || _isRecording) {
       onError?.call('录音器未初始化或正在录音');
@@ -807,7 +720,7 @@ class AudioManagerStream {
     try {
       await _recorder.start(
         const RecordConfig(
-          encoder: AudioEncoder.wav,  // 使用WAV格式确保兼容性
+          encoder: AudioEncoder.wav,
           sampleRate: SAMPLE_RATE,
           numChannels: 1,
           bitRate: 16,
@@ -825,7 +738,6 @@ class AudioManagerStream {
     }
   }
   
-  /// 停止录音
   Future<void> stopRecording() async {
     if (!_isRecording) return;
     
@@ -841,7 +753,6 @@ class AudioManagerStream {
     }
   }
 
-  /// 启动音频保存定时器
   void _startAudioSaveTimer() {
     _audioSaveTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (!_isStreamProcessing) {
@@ -853,18 +764,15 @@ class AudioManagerStream {
     });
   }
   
-  /// 保存最近的音频数据到文件
   Future<void> _saveRecentAudioToFiles() async {
     if (_completeProcessedAudio.isEmpty || _completeOriginalAudio.isEmpty) {
       return;
     }
     
     try {
-      // 使用完整的音频数据
       final processedAudio = _mergeAudioFrames(_completeProcessedAudio);
       final originalAudio = _mergeAudioFrames(_completeOriginalAudio);
       
-      // 保存为WAV文件（这样可以在录音过程中随时播放完整的音频）
       await _saveAudioAsWav(processedAudio, _realtimeProcessedPath);
       await _saveAudioAsWav(originalAudio, _realtimeOriginalPath);
       
@@ -875,7 +783,6 @@ class AudioManagerStream {
     }
   }
   
-  /// 合并音频帧
   Float32List _mergeAudioFrames(List<Float32List> frames) {
     if (frames.isEmpty) return Float32List(0);
     
@@ -891,21 +798,16 @@ class AudioManagerStream {
     return merged;
   }
   
-  /// 保存音频数据为WAV文件
   Future<void> _saveAudioAsWav(Float32List audioData, String filePath) async {
     try {
       print('开始保存WAV文件: $filePath');
-      print('音频数据长度: ${audioData.length}样本');
       
       final file = File(filePath);
-      
-      // 转换float32到int16
       final int16Data = Int16List(audioData.length);
       for (int i = 0; i < audioData.length; i++) {
         int16Data[i] = (audioData[i] * 32767).clamp(-32768, 32767).round();
       }
       
-      // 创建WAV文件头
       final sampleRate = SAMPLE_RATE;
       final numChannels = 1;
       final bitsPerSample = 16;
@@ -913,13 +815,6 @@ class AudioManagerStream {
       final blockAlign = numChannels * bitsPerSample ~/ 8;
       final dataSize = int16Data.length * 2;
       final fileSize = 36 + dataSize;
-      
-      print('WAV文件参数:');
-      print('  采样率: ${sampleRate}Hz');
-      print('  声道数: $numChannels');
-      print('  位深度: ${bitsPerSample}bit');
-      print('  数据大小: ${dataSize}字节');
-      print('  文件大小: ${fileSize}字节');
       
       final header = ByteData(44);
       header.setUint32(0, 0x52494646, Endian.big); // "RIFF"
@@ -936,25 +831,11 @@ class AudioManagerStream {
       header.setUint32(36, 0x64617461, Endian.big); // "data"
       header.setUint32(40, dataSize, Endian.little);
       
-      // 写入文件
       final bytes = <int>[];
       bytes.addAll(header.buffer.asUint8List());
       bytes.addAll(int16Data.buffer.asUint8List());
       
       await file.writeAsBytes(bytes);
-      
-      // 验证文件是否成功保存
-      final savedFile = File(filePath);
-      if (await savedFile.exists()) {
-        final savedSize = await savedFile.length();
-        print('WAV文件保存成功: ${savedSize}字节');
-        
-        if (savedSize != bytes.length) {
-          print('警告：保存的文件大小与预期不符');
-        }
-      } else {
-        print('错误：WAV文件保存失败，文件不存在');
-      }
       
     } catch (e) {
       print('保存WAV文件失败: $e');
@@ -962,36 +843,12 @@ class AudioManagerStream {
     }
   }
   
-  /// 播放实时原始音频
-  Future<void> playRealtimeOriginal() async {
-    // await _playRealtimeAudio(_realtimeOriginalPath, _originalPlayer, '播放原始音频');
-    // 替换为 toggleStreamPlayback
-    print("playRealtimeOriginal 废弃, 请使用 toggleStreamPlayback");
-  }
-  
-  /// 播放实时降噪音频
-  Future<void> playRealtimeProcessed() async {
-    // await _playRealtimeAudio(_realtimeProcessedPath, _processedPlayer, '播放降噪音频');
-    // 替换为 toggleStreamPlayback
-    print("playRealtimeProcessed 废弃, 请使用 toggleStreamPlayback");
-  }
-  
-  /// 播放实时音频的通用方法
   Future<void> _playAudio(String audioPath, String messagePrefix) async {
     print('准备播放音频: $audioPath');
 
     final audioFile = File(audioPath);
     if (!await audioFile.exists()) {
-      print('音频文件不存在: $audioPath');
       onError?.call('音频文件不存在，请等待或重新生成');
-      return;
-    }
-
-    final fileSize = await audioFile.length();
-    print('音频文件大小: ${fileSize}字节');
-    if (fileSize < 1000) { // 小于1KB的文件可能有问题
-      print('音频文件太小，可能数据不完整');
-      onError?.call('音频文件数据不完整');
       return;
     }
 
@@ -999,15 +856,12 @@ class AudioManagerStream {
       _currentPlayingFilePath = audioPath;
       await _player.setAudioSource(AudioSource.uri(Uri.file(audioPath)));
       await _player.play();
-      // _isPlaying will be set by specific toggle methods
       onStatusChanged?.call('$messagePrefix 开始播放');
       Fluttertoast.showToast(msg: '$messagePrefix 开始播放');
-      print('播放开始成功: $messagePrefix');
     } catch (e) {
       print('播放失败: $e');
       onError?.call('播放失败: $e');
       _currentPlayingFilePath = null;
-      // Reset specific playing flags if error occurs
       if (_isPlayingStream && audioPath.contains("realtime")) _isPlayingStream = false;
       if (_isPlayingFile && audioPath.contains("selected")) _isPlayingFile = false;
 
@@ -1015,7 +869,6 @@ class AudioManagerStream {
     }
   }
   
-  /// 计算音频RMS值（用于验证处理效果）
   double _calculateRMS(Float32List audioData) {
     if (audioData.isEmpty) return 0.0;
     
@@ -1026,7 +879,6 @@ class AudioManagerStream {
     return math.sqrt(sum / audioData.length);
   }
   
-  /// 比较原始音频和处理后音频的差异
   void _analyzeAudioDifference() {
     if (_completeOriginalAudio.isEmpty || _completeProcessedAudio.isEmpty) {
       return;
@@ -1037,51 +889,27 @@ class AudioManagerStream {
     
     final originalRMS = _calculateRMS(originalMerged);
     final processedRMS = _calculateRMS(processedMerged);
-    
-    // 计算平均差异
-    double totalDiff = 0.0;
-    final minLength = math.min(originalMerged.length, processedMerged.length);
-    
-    for (int i = 0; i < minLength; i++) {
-      totalDiff += (originalMerged[i] - processedMerged[i]).abs();
-    }
-    
-    final avgDiff = totalDiff / minLength;
     final rmsRatio = processedRMS / originalRMS;
     
     print('=== 音频处理分析报告 ===');
     print('原始音频RMS: ${originalRMS.toStringAsFixed(6)}');
     print('处理后音频RMS: ${processedRMS.toStringAsFixed(6)}');
     print('RMS比值: ${rmsRatio.toStringAsFixed(3)} (1.0表示无变化)');
-    print('平均样本差异: ${avgDiff.toStringAsFixed(6)}');
-    print('处理样本数: ${minLength}');
-    
-    if (avgDiff < 0.001) {
-      print('⚠️  警告：音频差异很小，可能FFI处理未生效');
-    } else {
-      print('✅ 音频已通过FFI处理，存在明显差异');
-    }
   }
   
-  /// 处理选择的音频文件 - 重构为仅准备路径
   Future<void> selectAudioFileAndPreparePaths(String filePath) async {
     if (!_isInitialized) {
       onError?.call('音频管理器未初始化');
       return;
     }
-    // if (_isFileProcessing) { // 这个状态现在用于表示 *降噪处理中*，而不是文件选择中
-    //   onError?.call('正在处理其他音频文件，请等待');
-    //   return;
-    // }
 
     onStatusChanged?.call('选择音频文件: ${path_helper.basename(filePath)}');
     
     _selectedAudioFilePath = filePath;
     final fileName = path_helper.basenameWithoutExtension(filePath);
-    final fileExt = path_helper.extension(filePath).toLowerCase();
 
     _selectedOriginalWavPath = path_helper.join(_appDir, '${fileName}_original_copy.wav');
-    _selectedProcessedWavPath = path_helper.join(_appDir, '${fileName}_processed_full.wav'); // For full processed file
+    _selectedProcessedWavPath = path_helper.join(_appDir, '${fileName}_processed_full.wav');
 
     try {
       final originalFile = File(filePath);
@@ -1089,7 +917,6 @@ class AudioManagerStream {
         throw Exception("选择的文件不存在: $filePath");
       }
 
-      // 停止当前任何文件播放
       if (_isPlayingFile) {
         _isExpectedPlayerStop = true;
         await _player.stop();
@@ -1097,20 +924,16 @@ class AudioManagerStream {
         _currentPlayingFilePath = null;
       }
       
-      // 如果选择的文件不是WAV，则需要转换或提示。当前_loadAudioFile仅处理WAV。
-      // 为了简化，我们先假设选择的就是WAV，或者在_loadAudioFile中处理转换/错误。
-      // 此处直接复制到 _selectedOriginalWavPath
       await originalFile.copy(_selectedOriginalWavPath!);
       print('原始文件已复制到: $_selectedOriginalWavPath');
       
-      // 清理旧的处理后文件（如果存在）
       final processedFullFile = File(_selectedProcessedWavPath!);
       if (await processedFullFile.exists()) {
         await processedFullFile.delete();
         print('旧的处理后文件已删除: $_selectedProcessedWavPath');
       }
 
-      _completeOriginalAudio.clear(); // Clear any previous full audio data
+      _completeOriginalAudio.clear();
       _completeProcessedAudio.clear();
 
       onStatusChanged?.call('文件选择完成: ${path_helper.basename(_selectedOriginalWavPath!)}');
@@ -1122,160 +945,6 @@ class AudioManagerStream {
       _selectedOriginalWavPath = null;
       _selectedProcessedWavPath = null;
       onStateChanged?.call();
-    }
-  }
-
-  /// 加载音频文件
-  Future<Float32List> _loadAudioFile(String filePath, {int? expectedSampleRate}) async {
-    // Modified to include robust WAV parsing for data chunk
-    try {
-        final file = File(filePath);
-        if (!await file.exists()) throw Exception('音频文件不存在: $filePath');
-
-        final fileBytes = await file.readAsBytes();
-        print('加载文件: $filePath, 大小: ${fileBytes.length} bytes');
-
-        if (fileBytes.length < 44) throw Exception('文件太小，可能不是有效的WAV文件');
-
-        final ByteData headerBytes = ByteData.view(fileBytes.buffer, 0, 44);
-
-        // Check RIFF and WAVE
-        if (headerBytes.getUint32(0, Endian.big) != 0x52494646 || // RIFF
-            headerBytes.getUint32(8, Endian.big) != 0x57415645) { // WAVE
-            throw Exception('不是有效的WAV文件格式 (RIFF/WAVE)');
-        }
-        // Check fmt 
-        if (headerBytes.getUint32(12, Endian.big) != 0x666d7420) { // "fmt "
-             throw Exception('WAV文件缺少fmt块');
-        }
-
-        final int audioFormat = headerBytes.getUint16(20, Endian.little);
-        if (audioFormat != 1) throw Exception('仅支持PCM格式的WAV文件 (format: $audioFormat)');
-        
-        final int numChannels = headerBytes.getUint16(22, Endian.little);
-        if (numChannels != 1) print('警告: 音频文件不是单声道 (声道数: $numChannels), 将尝试作为单声道处理');
-
-        final int sampleRate = headerBytes.getUint32(24, Endian.little);
-        if (expectedSampleRate != null && sampleRate != expectedSampleRate) {
-            print('警告: WAV文件采样率 ($sampleRate Hz) 与期望值 ($expectedSampleRate Hz) 不符. RNNoise期望 ${SAMPLE_RATE}Hz.');
-            // For now, we proceed but RNNoise might not work optimally.
-            // Ideally, resample here if needed, or reject.
-        }
-         if (sampleRate != SAMPLE_RATE) {
-            print('警告: 文件采样率 ($sampleRate) 与RNNoise期望 ($SAMPLE_RATE)不符. 结果可能不佳.');
-        }
-
-
-        final int bitsPerSample = headerBytes.getUint16(34, Endian.little);
-        if (bitsPerSample != 16) throw Exception('仅支持16位PCM WAV (位深度: $bitsPerSample)');
-
-        // Find 'data' chunk
-        int dataStartPosition = 12; // Default
-        bool foundData = false;
-        while(dataStartPosition < fileBytes.length - 8) {
-            String chunkId = String.fromCharCodes(fileBytes.sublist(dataStartPosition, dataStartPosition + 4));
-            int chunkSize = ByteData.view(fileBytes.buffer, dataStartPosition + 4, 4).getUint32(0, Endian.little);
-            if (chunkId == 'data') {
-                dataStartPosition += 8; // Move to start of data
-                foundData = true;
-                break;
-            }
-            dataStartPosition += (8 + chunkSize);
-            // Ensure alignment if chunk sizes are odd (though typically not for WAV chunks)
-            if (chunkSize % 2 != 0) dataStartPosition++;
-        }
-
-        if (!foundData) throw Exception('WAV文件找不到data数据块');
-        if (dataStartPosition >= fileBytes.length) throw Exception('WAV数据块位置超出文件范围');
-        
-        final audioSampleBytes = fileBytes.sublist(dataStartPosition);
-        final samples = Int16List.view(audioSampleBytes.buffer, audioSampleBytes.offsetInBytes, audioSampleBytes.lengthInBytes ~/ 2);
-        
-        final audioData = Float32List(samples.length);
-        for (int i = 0; i < samples.length; i++) {
-            audioData[i] = samples[i] / 32768.0;
-        }
-        print('音频文件加载成功: ${audioData.length}个样本 from $filePath');
-        return audioData;
-    } catch (e) {
-        print('加载音频文件 $filePath 失败: $e');
-        throw Exception('加载音频文件失败: $e');
-    }
-}
-
-
-  Future<void> _processAudioDataStream(Float32List audioData, {bool accumulateToComplete = true}) async {
-    final totalFrames = audioData.length ~/ FRAME_SIZE;
-    onStatusChanged?.call('开始流式处理选择的文件，总帧数: $totalFrames');
-    
-    if (accumulateToComplete) {
-      _completeOriginalAudio.clear(); 
-      _completeProcessedAudio.clear();
-    }
-
-    List<Float32List> processedFramesForCurrentOp = [];
-
-    for (int frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
-      if (_stopFileChunkProcessingLoop && !accumulateToComplete) break; // Allow stopping for chunk processing
-
-      final startIdx = frameIndex * FRAME_SIZE;
-      final endIdx = math.min(startIdx + FRAME_SIZE, audioData.length);
-      final frameSizeActual = endIdx - startIdx;
-      
-      final inputFrame = Float32List(FRAME_SIZE);
-      for (int i = 0; i < frameSizeActual; i++) {
-        inputFrame[i] = audioData[startIdx + i];
-      }
-      if (frameSizeActual < FRAME_SIZE) { // Zero pad if last frame is incomplete
-          for (int i = frameSizeActual; i < FRAME_SIZE; i++) inputFrame[i] = 0.0;
-      }
-      
-      final result = _rnnoise.processFrames(inputFrame, 1);
-      
-      if (accumulateToComplete) {
-        _completeOriginalAudio.add(Float32List.fromList(inputFrame));
-        _completeProcessedAudio.add(Float32List.fromList(result.processedAudio));
-      } else {
-        processedFramesForCurrentOp.add(Float32List.fromList(result.processedAudio));
-      }
-      
-      if (frameIndex % 100 == 0 || frameIndex == totalFrames - 1) {
-        final progress = (frameIndex / totalFrames * 100).toInt();
-        onStatusChanged?.call('处理进度: $progress% (${frameIndex + 1}/$totalFrames)');
-        final processResult = AudioProcessResult(
-          processedAudio: result.processedAudio, vadProbability: result.vadProbability,
-          framesProcessed: frameIndex + 1, timestamp: DateTime.now(),
-        );
-        onAudioProcessed?.call(processResult);
-      }
-      
-      if (frameIndex % 50 == 0) await Future.delayed(const Duration(milliseconds: 1));
-    }
-     if (!accumulateToComplete) {
-      // This path is for chunk processing, caller will handle merged frames
-      // For simplicity, let's return the merged frames of this operation if not accumulating globally
-      // However, _processAndFeedChunks directly handles merging its chunks.
-      // This `else` branch might be redundant if _processAudioDataStream is only called for full processing.
-    }
-  }
-
-  Future<void> _saveSelectedProcessedWavFile({bool isStreamSave = false}) async {
-    if (_completeProcessedAudio.isEmpty) {
-      throw Exception('没有已处理的音频数据可保存 (_completeProcessedAudio is empty)');
-    }
-    if (_selectedProcessedWavPath == null) {
-        throw Exception('目标已处理文件路径 (_selectedProcessedWavPath) 未设置');
-    }
-    try {
-      final mergedAudio = _mergeAudioFrames(_completeProcessedAudio);
-      await _saveAudioAsWav(mergedAudio, _selectedProcessedWavPath!);
-      print('降噪结果保存完成: $_selectedProcessedWavPath (StreamSave: $isStreamSave)');
-      if (isStreamSave) { // After streaming, clear the buffer as it's now saved.
-        _completeProcessedAudio.clear();
-        _completeOriginalAudio.clear(); 
-      }
-    } catch (e) {
-      throw Exception('保存降噪后的音频文件失败: $e');
     }
   }
 
@@ -1293,8 +962,8 @@ class AudioManagerStream {
   void setDenoiseEnabledForFile(bool enabled) async {
     _isDenoisingEnabledForFile = enabled;
     if (_isPlayingFile) { 
-      _isExpectedPlayerStop = true; // Expect player to stop due to this action
-      await _stopAndCleanupFileProcessing(); //This will stop player, clear chunks etc.
+      _isExpectedPlayerStop = true;
+      await _stopAndCleanupFileProcessing();
       onStatusChanged?.call('文件降噪已 ${_isDenoisingEnabledForFile ? "开启" : "关闭"}，请重新播放');
     } else {
       onStatusChanged?.call('文件降噪已 ${_isDenoisingEnabledForFile ? "开启" : "关闭"}');
@@ -1314,15 +983,15 @@ class AudioManagerStream {
       _isPlayingStream = false;
       onStatusChanged?.call('实时音频暂停');
     } else {
-      String? pathToPlay = _isDenoisingEnabledForStream ? _realtimeProcessedPath : _realtimeOriginalPath;
+      String pathToPlay = _isDenoisingEnabledForStream ? _realtimeProcessedPath : _realtimeOriginalPath;
       String messagePrefix = _isDenoisingEnabledForStream ? '实时降噪音频' : '实时原始音频';
       
-      if (pathToPlay == null || !await File(pathToPlay).exists()) {
+      if (!await File(pathToPlay).exists()) {
         onError?.call('$messagePrefix 文件不存在，请先录制。'); return;
       }
       
       if (_currentPlayingFilePath == pathToPlay && _player.processingState != ProcessingState.completed) {
-        await _player.play(); // Resume
+        await _player.play();
       } else {
         await _playAudio(pathToPlay, messagePrefix);
       }
@@ -1332,17 +1001,17 @@ class AudioManagerStream {
   }
 
   Future<void> _stopAndCleanupFileProcessing() async {
-    _stopFileChunkProcessingLoop = true; // Signal background loop to stop
-    if (_isChunkProcessingActive || _isPlayingFile) { // if chunk processing was active or file was playing
+    _stopFileChunkProcessingLoop = true;
+    if (_isChunkProcessingActive || _isPlayingFile) {
         _isExpectedPlayerStop = true;
         await _player.stop();
     }
     _isPlayingFile = false;
-    _isFileProcessing = false; // General file processing state
-    _isChunkProcessingActive = false; // Specifically for the background chunk processing task
+    _isFileProcessing = false;
+    _isChunkProcessingActive = false;
     _currentPlayingFilePath = null;
     
-    _concatenatingFileSource = null; // Clear the source
+    _concatenatingFileSource = null;
     _cleanupChunkFiles();
     onStateChanged?.call();
   }
@@ -1353,62 +1022,46 @@ class AudioManagerStream {
       }
       _processedChunkFilePaths.clear();
       
-      // 清理当前临时文件（如果存在）
       if (_currentTempFilePath != null) {
         try { 
           File(_currentTempFilePath!).deleteSync();
-          print("Deleted current temp file: $_currentTempFilePath");
         } catch(e) {
           print("Error deleting current temp file $_currentTempFilePath: $e");
         }
         _currentTempFilePath = null;
       }
       
-      // 清理内存缓冲队列
       _audioBufferQueue.clear();
       _bufferPlaybackIndex = 0;
-      print("_cleanupChunkFiles: Cleared chunk files and buffer queue (Data URI memory mode)");
+      print("_cleanupChunkFiles: Cleared chunk files and buffer queue.");
   }
 
   Future<void> toggleFilePlayback() async {
-    print("toggleFilePlayback called. isPlayingStream: $_isPlayingStream, isPlayingFile: $_isPlayingFile, isDenoisingEnabledForFile: $_isDenoisingEnabledForFile");
     if (_isPlayingStream) {
         _isExpectedPlayerStop = true;
         await _player.stop(); _isPlayingStream = false; _currentPlayingFilePath = null;
         onStatusChanged?.call('已停止实时流播放以播放文件');
-        print("Stopped stream playback to play file.");
     }
 
     if (_selectedOriginalWavPath == null) {
       onError?.call('请先选择一个音频文件');
-      print("toggleFilePlayback: No selected original WAV path.");
       return;
     }
 
-    if (_isPlayingFile) { // Pause request
-      print("toggleFilePlayback: Pausing file playback. Current mode: ${_isDenoisingEnabledForFile ? 'Denoised' : 'Original'}");
+    if (_isPlayingFile) {
       if (_isDenoisingEnabledForFile) {
         _stopFileChunkProcessingLoop = true; 
-        print("toggleFilePlayback: Set _stopFileChunkProcessingLoop = true for denoised pause.");
       }
-      print("toggleFilePlayback: Calling _player.pause()...");
       _isExpectedPlayerStop = true;
       await _player.pause();
-      print("toggleFilePlayback: _player.pause() completed.");
       _isPlayingFile = false; 
-      _isFileProcessing = false; // General processing should also be considered stopped.
+      _isFileProcessing = false;
       onStatusChanged?.call('文件音频暂停');
-      print("toggleFilePlayback: Pause state updated. _isPlayingFile=false, _isFileProcessing=false, _stopFileChunkProcessingLoop=$_stopFileChunkProcessingLoop");
-    } else { // Play or Resume request
-      print("toggleFilePlayback: Starting or resuming file playback.");
-      
+    } else {
       if (_isDenoisingEnabledForFile) {
         onStatusChanged?.call('文件降噪音频 (分块流式) 准备中...');
-        print("toggleFilePlayback: Denoising enabled. Preparing for chunked playback.");
         
-        // 检查是否需要重新设置播放源
         if (_currentPlayingFilePath != _selectedOriginalWavPath || !_player.playing) {
-             print("toggleFilePlayback: Preparing for ${_useMemoryStreamPlayback ? 'memory stream' : 'concatenating'} playback.");
              if(_player.playing) {
                 _isExpectedPlayerStop = true;
                 await _player.stop();
@@ -1416,93 +1069,68 @@ class AudioManagerStream {
              _cleanupChunkFiles();
              
              if (_useMemoryStreamPlayback) {
-                // 内存流播放：不需要预先设置AudioSource，在_consumeAudioBuffersMemoryStream中设置
-                print("toggleFilePlayback: Preparing for memory stream playback (no pre-setup needed).");
+                print("Preparing for memory stream playback.");
              } else {
-                // 传统方式：使用ConcatenatingAudioSource
                 _concatenatingFileSource = ConcatenatingAudioSource(children: [], useLazyPreparation: true);
                 try {
                    await _player.setAudioSource(_concatenatingFileSource!, initialIndex: 0, preload: true);
-                   print("toggleFilePlayback: Set concatenating audio source to player.");
                 } catch (e) {
-                   print("Error setting concatenating audio source: $e");
                    onError?.call("播放器设置失败: $e");
-                   _isPlayingFile = false;
                    _isFileProcessing = false;
                    onStateChanged?.call();
                    return;
                 }
              }
-        } else {
-          print("toggleFilePlayback: Resuming with existing playback mode.");
         }
-        _currentPlayingFilePath = _selectedOriginalWavPath; // Mark what we are conceptually playing
+        _currentPlayingFilePath = _selectedOriginalWavPath;
         
         try {
-            _isPlayingFile = true; // Set to true BEFORE starting processing
-            _isFileProcessing = true; // Indicate that background processing will start
-            print("toggleFilePlayback: Starting playback mode: ${_useMemoryStreamPlayback ? 'Memory Stream' : 'Concatenating Source'}");
+            _isPlayingFile = true;
+            _isFileProcessing = true;
             
-                         if (_useMemoryStreamPlayback) {
-                // 优化的动态文件模式：只启动处理，消费会在_startBufferedPlayback中自动启动
-                print("toggleFilePlayback: Starting optimized dynamic file processing.");
-                _processAndFeedFileChunks(); // Start background processing (don't await)
+             if (_useMemoryStreamPlayback) {
+                _processAndFeedFileChunks();
              } else {
-                // 传统模式：先启动播放器，然后开始处理
-                print("toggleFilePlayback: Calling player.play() for concatenating source.");
                 await _player.play();
-                _processAndFeedFileChunks(); // Start background processing (don't await)
+                _processAndFeedFileChunks();
              }
             
-            print("toggleFilePlayback: Playback started successfully. _isPlayingFile=true, _isFileProcessing=true");
         } catch (e) {
-            print("Error starting playback: $e");
             onError?.call("播放器启动失败: $e");
-            _isPlayingFile = false; // Ensure state is correct on failure
+            _isPlayingFile = false;
             _isFileProcessing = false;
             await _stopAndCleanupFileProcessing(); 
-            onStateChanged?.call();
             return;
         }
-      } else { // Play original WAV directly
+      } else {
         onStatusChanged?.call('文件原始音频准备中...');
-        print("toggleFilePlayback: Denoising disabled. Playing original directly.");
-        await _stopAndCleanupFileProcessing(); // Ensure any chunk processing is stopped
+        await _stopAndCleanupFileProcessing();
 
         try {
-            // Check if we are resuming a paused original file
             if (_currentPlayingFilePath == _selectedOriginalWavPath && 
                 _player.processingState != ProcessingState.completed &&
-                !_player.playing && // It was paused
-                _player.audioSource != null) { // And source is still set
-               print("toggleFilePlayback: Resuming original non-denoised file.");
-               _isPlayingFile = true; // Set BEFORE calling play to ensure UI updates immediately
+                !_player.playing &&
+                _player.audioSource != null) {
                await _player.play(); 
             } else {
-               print("toggleFilePlayback: Playing original non-denoised file from start.");
                _currentPlayingFilePath = _selectedOriginalWavPath;
-               _isPlayingFile = true; // Set BEFORE calling play to ensure UI updates immediately
                await _player.setAudioSource(AudioSource.uri(Uri.file(_selectedOriginalWavPath!)));
                await _player.play();
                onStatusChanged?.call('文件原始音频 开始播放');
             }
+            _isPlayingFile = true;
         } catch (e) {
-            print("Error playing original file: $e");
             onError?.call('播放原始文件失败: $e');
-            _isPlayingFile = false; // Ensure state is correct on failure
+            _isPlayingFile = false;
             _currentPlayingFilePath = null; 
         }
       }
     }
-    // Diagnostic print before calling onStateChanged
-    print("toggleFilePlayback END state: _isPlayingFile: $_isPlayingFile, _isFileProcessing: $_isFileProcessing, _isDenoisingEnabledForStream: $_isDenoisingEnabledForStream, _isDenoisingEnabledForFile: $_isDenoisingEnabledForFile, _stopFileChunkProcessingLoop: $_stopFileChunkProcessingLoop, _currentPlayingFilePath: $_currentPlayingFilePath");
     onStateChanged?.call();
   }
   
   Future<void> _processAndFeedFileChunks() async {
-    print("_processAndFeedFileChunks started. Selected Original Path: $_selectedOriginalWavPath, isPlayingFile: $_isPlayingFile");
     if (_selectedOriginalWavPath == null || !_isPlayingFile) { 
-      print("_processAndFeedFileChunks: Conditions not met to start (no path or not playing). Bailing out.");
       _isChunkProcessingActive = false;
       _isFileProcessing = false;
        onStateChanged?.call();
@@ -1512,7 +1140,7 @@ class AudioManagerStream {
     _isChunkProcessingActive = true;
     _isFileProcessing = true; 
     _stopFileChunkProcessingLoop = false;
-    _audioBufferQueue.clear(); // 清空缓冲队列
+    _audioBufferQueue.clear();
     _bufferPlaybackIndex = 0;
     onStateChanged?.call(); 
 
@@ -1521,24 +1149,37 @@ class AudioManagerStream {
     _completeOriginalAudio.clear(); 
     _completeProcessedAudio.clear();
     int totalAudioBytes = 0;
+    
+    int dataStartPosition = 44; 
+    int originalSampleRate = 48000;
+    int numChannels = 1;
+    int bitsPerSample = 16;
 
     try {
-      print("_processAndFeedFileChunks: Opening file: $_selectedOriginalWavPath");
       raf = await File(_selectedOriginalWavPath!).open(mode: FileMode.read);
-      print("_processAndFeedFileChunks: File opened. Length: ${await raf.length()}");
       
-      // WAV Header Parsing（简化版本）
-      int dataStartPosition = 44; 
       if (await raf.length() >= 44) {
-          final headerCheckBytes = await raf.read(math.min(100, await raf.length())); 
+          final headerCheckBytes = await raf.read(math.min(200, await raf.length())); 
           await raf.setPosition(0); 
 
           if (String.fromCharCodes(headerCheckBytes.sublist(0,4)) != "RIFF" || 
               String.fromCharCodes(headerCheckBytes.sublist(8,12)) != "WAVE") {
-              throw Exception("Selected file is not a valid WAV file for chunking.");
+              throw Exception("Selected file is not a valid WAV file.");
           }
+
+          final headerBytes = ByteData.view(headerCheckBytes.buffer, headerCheckBytes.offsetInBytes, headerCheckBytes.length);
           
-          // 寻找data chunk
+          numChannels = headerBytes.getUint16(22, Endian.little);
+          originalSampleRate = headerBytes.getUint32(24, Endian.little);
+          bitsPerSample = headerBytes.getUint16(34, Endian.little);
+          
+          print('--- WAV Header Info (Chunk Processing) ---');
+          print('Sample Rate: ${originalSampleRate}Hz, Channels: $numChannels, BitsPerSample: ${bitsPerSample}bit');
+          
+          if (originalSampleRate != SAMPLE_RATE) {
+            print('⚠️ Sample rate mismatch: File is ${originalSampleRate}Hz, RNNoise requires ${SAMPLE_RATE}Hz. This may affect pitch.');
+          }
+        
           int searchPos = 12;
           bool foundData = false;
           while(searchPos < headerCheckBytes.length - 8) {
@@ -1549,34 +1190,28 @@ class AudioManagerStream {
               if (chunkId == 'data') {
                   dataStartPosition = searchPos + 8;
                   foundData = true;
-                  print("_processAndFeedFileChunks: Found 'data' chunk starting at $dataStartPosition");
                   break;
               }
               searchPos += (8 + chunkSize);
               if (chunkSize % 2 != 0 && searchPos < headerCheckBytes.length) searchPos++; 
           }
           if (!foundData) {
-             throw Exception("Could not find 'data' chunk in WAV for chunking.");
+             throw Exception("Could not find 'data' chunk in WAV.");
           }
       } else {
-        throw Exception("File too short to be a valid WAV for chunking.");
+        throw Exception("File too short to be a valid WAV.");
       }
-      
+    
       await raf.setPosition(dataStartPosition);
       totalAudioBytes = await raf.length() - dataStartPosition;
-      print("_processAndFeedFileChunks: Total audio data bytes: $totalAudioBytes");
       
-      int samplesPerChunk = SAMPLE_RATE * _chunkDurationSeconds; // 1秒 = 48000样本
-      int bytesPerChunkTarget = samplesPerChunk * 2; // 16位PCM
+      int samplesPerChunk = SAMPLE_RATE * _chunkDurationSeconds;
+      int bytesPerChunkTarget = samplesPerChunk * (bitsPerSample ~/ 8) * numChannels;
 
-      // 开始双缓冲处理循环
       while (totalAudioBytes > 0 && !_stopFileChunkProcessingLoop && _isPlayingFile) {
-        onStatusChanged?.call("处理音频块 ${chunkIndex + 1}... (${(chunkIndex * _chunkDurationSeconds)}s)");
-        print("_processAndFeedFileChunks: Processing chunk ${chunkIndex + 1}. Remaining bytes: $totalAudioBytes");
+        onStatusChanged?.call("Processing chunk ${chunkIndex + 1}...");
 
-        // 如果缓冲队列太满，等待播放消费
         while (_audioBufferQueue.length >= _maxBufferQueueSize && !_stopFileChunkProcessingLoop && _isPlayingFile) {
-          print("_processAndFeedFileChunks: Buffer queue full (${_audioBufferQueue.length}), waiting...");
           await Future.delayed(Duration(milliseconds: 200));
         }
 
@@ -1587,51 +1222,71 @@ class AudioManagerStream {
         
         Uint8List pcmChunkBytes = await raf.read(bytesToRead);
         if (pcmChunkBytes.isEmpty) break;
-        
-        totalAudioBytes -= pcmChunkBytes.length; 
 
-        // 处理音频块
+        if (numChannels > 1) {
+            pcmChunkBytes = _downmixToMono(pcmChunkBytes, bitsPerSample, numChannels);
+        }
+        
+        totalAudioBytes -= bytesToRead;
+
         final processedChunk = await _processAudioChunk(pcmChunkBytes, chunkIndex);
         
         if (processedChunk != null && !_stopFileChunkProcessingLoop && _isPlayingFile) {
-          // 创建WAV格式的音频数据（内存中）
           final wavData = _createWavFromPCM(processedChunk, SAMPLE_RATE, 1, 16);
-          
-          // 添加到内存缓冲队列
           _audioBufferQueue.add(wavData);
-          print("_processAndFeedFileChunks: Added chunk $chunkIndex to buffer queue. Queue size: ${_audioBufferQueue.length}");
           
-          // 如果这是第一个块，立即开始播放
           if (chunkIndex == 0) {
             _startBufferedPlayback();
           }
         }
         
         chunkIndex++;
-        await Future.delayed(Duration(milliseconds: 50)); // 小间隔避免阻塞UI
+        await Future.delayed(Duration(milliseconds: 50));
       }
       
-      print("_processAndFeedFileChunks: Processing completed. Total chunks: $chunkIndex");
-      onStatusChanged?.call("音频块处理完成，总计${chunkIndex}个块");
-      
+      onStatusChanged?.call("Chunk processing complete. Total chunks: $chunkIndex");
+    
     } catch (e, s) {
-      onError?.call("处理/读取音频块失败: $e");
+      onError?.call("Failed to process audio chunks: $e");
       print("Error in _processAndFeedFileChunks: $e\nStackTrace: $s");
     } finally {
       await raf?.close();
       _isChunkProcessingActive = false;
       if (_stopFileChunkProcessingLoop || !_isPlayingFile) {
           _isFileProcessing = false;
-          print("_processAndFeedFileChunks: Setting _isFileProcessing to false due to stop/not playing.");
-      } else if (totalAudioBytes <= 0) {
-          print("_processAndFeedFileChunks: All data processed. _isFileProcessing remains $_isFileProcessing");
       }
-      print("_processAndFeedFileChunks finished. Queue size: ${_audioBufferQueue.length}");
       onStateChanged?.call();
     }
   }
 
-  /// 处理单个音频块的降噪
+  Uint8List _downmixToMono(Uint8List multiChannelPcm, int bitsPerSample, int numChannels) {
+      if (numChannels <= 1) return multiChannelPcm;
+      if (bitsPerSample != 16) {
+          print("Warning: Only 16-bit audio is supported for downmixing. Skipping.");
+          return multiChannelPcm;
+      }
+
+      int bytesPerSample = bitsPerSample ~/ 8;
+      int frameSize = bytesPerSample * numChannels;
+      int frameCount = multiChannelPcm.lengthInBytes ~/ frameSize;
+      
+      final monoPcm = Uint8List(frameCount * bytesPerSample);
+      final multiChannelView = ByteData.view(multiChannelPcm.buffer, multiChannelPcm.offsetInBytes, multiChannelPcm.lengthInBytes);
+      final monoView = ByteData.view(monoPcm.buffer);
+
+      for (int i = 0; i < frameCount; i++) {
+          int frameOffset = i * frameSize;
+          int sum = 0;
+          for (int c = 0; c < numChannels; c++) {
+              sum += multiChannelView.getInt16(frameOffset + c * bytesPerSample, Endian.little);
+          }
+          int avgSample = (sum / numChannels).round();
+          monoView.setInt16(i * bytesPerSample, avgSample, Endian.little);
+      }
+      
+      return monoPcm;
+  }
+
   Future<Uint8List?> _processAudioChunk(Uint8List pcmChunkBytes, int chunkIndex) async {
     try {
       List<Float32List> originalFramesInChunk = [];
@@ -1640,7 +1295,6 @@ class AudioManagerStream {
       ByteData pcmChunkByteData = ByteData.view(pcmChunkBytes.buffer, pcmChunkBytes.offsetInBytes, pcmChunkBytes.lengthInBytes);
       int currentByteOffset = 0;
 
-      // 按RNNoise帧大小处理
       while(currentByteOffset + (FRAME_SIZE * 2) <= pcmChunkByteData.lengthInBytes) {
           if (_stopFileChunkProcessingLoop || !_isPlayingFile) break; 
 
@@ -1659,17 +1313,15 @@ class AudioManagerStream {
       }
 
       if (processedFramesInChunk.isNotEmpty) {
-        // 将所有处理后的帧合并为一个音频块
         Float32List processedChunkF32 = _mergeAudioFrames(processedFramesInChunk);
         _completeOriginalAudio.addAll(originalFramesInChunk); 
         _completeProcessedAudio.addAll(processedFramesInChunk);
         
-        // 转换为PCM数据
         final pcmData = Uint8List(processedChunkF32.length * 2);
+        final pcmByteData = ByteData.view(pcmData.buffer);
         for (int i = 0; i < processedChunkF32.length; i++) {
           int sample = (processedChunkF32[i] * 32767).round().clamp(-32768, 32767);
-          pcmData[i * 2] = sample & 0xFF;
-          pcmData[i * 2 + 1] = (sample >> 8) & 0xFF;
+          pcmByteData.setInt16(i * 2, sample, Endian.little);
         }
         
         return pcmData;
@@ -1682,7 +1334,6 @@ class AudioManagerStream {
     }
   }
 
-  /// 从PCM数据创建WAV格式的字节数据（内存中）
   Uint8List _createWavFromPCM(Uint8List pcmData, int sampleRate, int channels, int bitsPerSample) {
     final dataSize = pcmData.length;
     final totalSize = 44 + dataSize;
@@ -1690,23 +1341,19 @@ class AudioManagerStream {
     final wavData = Uint8List(totalSize);
     final wavView = ByteData.view(wavData.buffer);
     
-    // WAV文件头
-    // RIFF chunk
     wavData.setRange(0, 4, 'RIFF'.codeUnits);
     wavView.setUint32(4, totalSize - 8, Endian.little);
     wavData.setRange(8, 12, 'WAVE'.codeUnits);
     
-    // fmt chunk
     wavData.setRange(12, 16, 'fmt '.codeUnits);
-    wavView.setUint32(16, 16, Endian.little); // chunk size
-    wavView.setUint16(20, 1, Endian.little); // PCM format
+    wavView.setUint32(16, 16, Endian.little);
+    wavView.setUint16(20, 1, Endian.little);
     wavView.setUint16(22, channels, Endian.little);
     wavView.setUint32(24, sampleRate, Endian.little);
-    wavView.setUint32(28, sampleRate * channels * bitsPerSample ~/ 8, Endian.little); // byte rate
-    wavView.setUint16(32, channels * bitsPerSample ~/ 8, Endian.little); // block align
+    wavView.setUint32(28, sampleRate * channels * bitsPerSample ~/ 8, Endian.little);
+    wavView.setUint16(32, channels * bitsPerSample ~/ 8, Endian.little);
     wavView.setUint16(34, bitsPerSample, Endian.little);
     
-    // data chunk
     wavData.setRange(36, 40, 'data'.codeUnits);
     wavView.setUint32(40, dataSize, Endian.little);
     wavData.setRange(44, 44 + dataSize, pcmData);
@@ -1714,163 +1361,129 @@ class AudioManagerStream {
     return wavData;
   }
 
-  /// 开始缓冲播放
   void _startBufferedPlayback() async {
     if (_audioBufferQueue.isEmpty) return;
     
-    print("_startBufferedPlayback: Starting ${_useMemoryStreamPlayback ? 'memory stream' : 'file-based'} playback with ${_audioBufferQueue.length} buffers");
-    
-    // 启动播放消费循环
     _consumeAudioBuffers();
   }
 
-  /// 消费音频缓冲队列
   void _consumeAudioBuffers() async {
     if (_useMemoryStreamPlayback) {
-      // 使用完全基于内存的流播放
       _consumeAudioBuffersMemoryStream();
     } else {
-      // 使用传统的临时文件方式（备用）
       _consumeAudioBuffersFileMode();
     }
   }
 
-  /// 边处理边播放的渐进式内存流播放
   void _consumeAudioBuffersMemoryStream() async {
-    print("_consumeAudioBuffersMemoryStream: Starting progressive streaming playback");
-    
-    List<int> completeAudioData = [];
+    Uint8List? completeAudioData;
     bool hasStartedPlayback = false;
     int chunksProcessedSinceLastUpdate = 0;
-    const int initialBatchSize = 3; // 初始批次：收集3个chunk再播放，确保足够长度
-    const int updateBatchSize = 2; // 后续更新：每2个chunk更新一次
+    const int initialBatchSize = 3;
+    const int updateBatchSize = 2;
     Duration lastPlayPosition = Duration.zero;
     
-    // 渐进式播放：先播放初始数据，然后分批更新
     while (_isPlayingFile && !_stopFileChunkProcessingLoop) {
       if (_audioBufferQueue.isNotEmpty) {
         final audioData = _audioBufferQueue.removeFirst();
         
         try {
           if (!hasStartedPlayback) {
-            // 第一批：收集足够的初始数据再开始播放
-            completeAudioData = audioData.toList();
+            completeAudioData = audioData;
             int initialBatchCount = 1;
-            _bufferPlaybackIndex++;
             
-            print("_consumeAudioBuffersMemoryStream: Collecting initial batch, got chunk 1 (${audioData.length} bytes)");
-            
-            // 等待并收集初始批次的chunks
             while (initialBatchCount < initialBatchSize) {
-              // 等待更多chunks
               while (_audioBufferQueue.isEmpty && _isChunkProcessingActive) {
                 await Future.delayed(Duration(milliseconds: 50));
-                print("_consumeAudioBuffersMemoryStream: Waiting for chunk ${initialBatchCount + 1} for initial batch...");
               }
               
               if (_audioBufferQueue.isNotEmpty) {
                 final nextChunk = _audioBufferQueue.removeFirst();
-                final pcmData = nextChunk.sublist(44);
-                completeAudioData.addAll(pcmData);
+                completeAudioData = _appendWavChunks(completeAudioData!, nextChunk);
                 initialBatchCount++;
-                _bufferPlaybackIndex++;
-                print("_consumeAudioBuffersMemoryStream: Added chunk $initialBatchCount to initial batch (${nextChunk.length} bytes)");
               } else if (!_isChunkProcessingActive) {
-                print("_consumeAudioBuffersMemoryStream: Processing completed, starting with available ${initialBatchCount} chunks");
                 break;
               }
             }
             
-            // 开始播放初始批次
-            await _startProgressivePlayback(completeAudioData);
+            await _startProgressivePlayback(completeAudioData!);
             hasStartedPlayback = true;
-            chunksProcessedSinceLastUpdate = 0; // 重置计数器
-            print("_consumeAudioBuffersMemoryStream: Started progressive playback with $initialBatchCount chunks (${completeAudioData.length} bytes)");
+            chunksProcessedSinceLastUpdate = 0;
           } else {
-            // 后续块：累积到批次大小后更新
-            final pcmData = audioData.sublist(44);
-            completeAudioData.addAll(pcmData);
+            completeAudioData = _appendWavChunks(completeAudioData!, audioData);
             chunksProcessedSinceLastUpdate++;
-            _bufferPlaybackIndex++;
             
-            print("_consumeAudioBuffersMemoryStream: Accumulated chunk ${_bufferPlaybackIndex} (${pcmData.length} bytes, batch: ${chunksProcessedSinceLastUpdate}/${updateBatchSize}, total: ${completeAudioData.length} bytes)");
-            
-            // 达到批次大小或者是最后一批，进行更新
             if (chunksProcessedSinceLastUpdate >= updateBatchSize || 
                 (_audioBufferQueue.isEmpty && !_isChunkProcessingActive)) {
               
               await _updateProgressivePlayback(completeAudioData, lastPlayPosition);
               chunksProcessedSinceLastUpdate = 0;
-              print("_consumeAudioBuffersMemoryStream: Updated playback with batch of $updateBatchSize chunks");
             }
           }
           
-          // 记录当前播放位置，用于恢复
           if (_player.duration != null && _player.position.inMilliseconds > 0) {
             lastPlayPosition = _player.position;
           }
           
-          // 适当延迟，让播放器有时间处理
           await Future.delayed(Duration(milliseconds: 30));
         } catch (e) {
           print("Error in progressive playback: $e");
         }
       } else {
-        // 检查是否处理完成
         if (!_isChunkProcessingActive && hasStartedPlayback && chunksProcessedSinceLastUpdate > 0) {
-          // 处理剩余的chunks
-          await _updateProgressivePlayback(completeAudioData, lastPlayPosition);
-          print("_consumeAudioBuffersMemoryStream: Final update with remaining ${chunksProcessedSinceLastUpdate} chunks");
+          await _updateProgressivePlayback(completeAudioData!, lastPlayPosition);
           break;
         }
-        // 等待新的缓冲数据
-        print("_consumeAudioBuffersMemoryStream: Waiting for more chunks... Queue size: ${_audioBufferQueue.length}, Processing active: $_isChunkProcessingActive, Playback started: $hasStartedPlayback, Chunks since update: $chunksProcessedSinceLastUpdate");
         await Future.delayed(Duration(milliseconds: 100));
       }
     }
     
-    print("_consumeAudioBuffersMemoryStream: Progressive streaming playback completed (Final queue size: ${_audioBufferQueue.length})");
+    if (hasStartedPlayback && _player.duration != null && completeAudioData != null) {
+      final finalDuration = _player.duration!.inMilliseconds / 1000.0;
+      final finalDataSize = completeAudioData.length - 44;
+      final expectedFinalDuration = finalDataSize / (SAMPLE_RATE * 1 * 2);
+      print('--- Final Playback Analysis ---');
+      print('Final PCM Size: ${finalDataSize} bytes');
+      print('Expected Duration: ${expectedFinalDuration.toStringAsFixed(2)}s');
+      print('Actual Player Duration: ${finalDuration.toStringAsFixed(2)}s');
+      print('Ratio (Actual/Expected): ${(finalDuration / expectedFinalDuration).toStringAsFixed(3)}');
+    }
   }
   
-  /// 开始渐进式播放
-  Future<void> _startProgressivePlayback(List<int> initialAudioData) async {
+  Uint8List _appendWavChunks(Uint8List baseWav, Uint8List newWav) {
+    final basePcm = baseWav.sublist(44);
+    final newPcm = newWav.sublist(44);
+
+    final combinedPcm = Uint8List(basePcm.length + newPcm.length);
+    combinedPcm.setRange(0, basePcm.length, basePcm);
+    combinedPcm.setRange(basePcm.length, combinedPcm.length, newPcm);
+
+    return _createWavFromPCM(combinedPcm, SAMPLE_RATE, 1, 16);
+  }
+
+  Future<void> _startProgressivePlayback(Uint8List initialAudioData) async {
     try {
-      // 更新WAV头
-      final totalDataSize = initialAudioData.length - 44;
-      _updateWavHeaderInMemory(initialAudioData, totalDataSize);
-      
-      // 转换为Data URI并开始播放
       final base64Audio = base64Encode(initialAudioData);
       final dataUri = 'data:audio/wav;base64,$base64Audio';
       
       await _player.setAudioSource(AudioSource.uri(Uri.parse(dataUri)));
       await _player.play();
-      print("_startProgressivePlayback: Initial playback started (${initialAudioData.length} bytes)");
+      
     } catch (e) {
-      print("Error starting progressive playback: $e");
-      onError?.call("渐进式播放启动失败: $e");
+      onError?.call("Failed to start progressive playback: $e");
     }
   }
   
-  /// 更新渐进式播放
-  Future<void> _updateProgressivePlayback(List<int> updatedAudioData, Duration lastPosition) async {
+  Future<void> _updateProgressivePlayback(Uint8List updatedAudioData, Duration lastPosition) async {
     try {
-      // 更新WAV头
-      final totalDataSize = updatedAudioData.length - 44;
-      _updateWavHeaderInMemory(updatedAudioData, totalDataSize);
-      
-      // 保存当前播放状态
       final wasPlaying = _player.playing;
       final currentPosition = _player.position;
       
-      // 转换为新的Data URI
       final base64Audio = base64Encode(updatedAudioData);
       final dataUri = 'data:audio/wav;base64,$base64Audio';
       
-      // 快速更新音频源
       await _player.setAudioSource(AudioSource.uri(Uri.parse(dataUri)));
       
-      // 恢复播放位置和状态
       if (currentPosition.inMilliseconds > 0) {
         await _player.seek(currentPosition);
       }
@@ -1879,88 +1492,24 @@ class AudioManagerStream {
         await _player.play();
       }
       
-      print("_updateProgressivePlayback: Updated audio source (${updatedAudioData.length} bytes) at position ${currentPosition.inSeconds}s");
     } catch (e) {
       print("Error updating progressive playback: $e");
-      // 如果更新失败，尝试继续播放原有内容
     }
   }
 
-  /// 在内存中更新WAV文件头
-  void _updateWavHeaderInMemory(List<int> wavData, int dataSize) {
-    // 更新文件总大小 (位置4-7)
-    final totalSize = dataSize + 36; // 36 = 44 - 8 (RIFF header)
-    wavData[4] = totalSize & 0xFF;
-    wavData[5] = (totalSize >> 8) & 0xFF;
-    wavData[6] = (totalSize >> 16) & 0xFF;
-    wavData[7] = (totalSize >> 24) & 0xFF;
-    
-    // 更新数据块大小 (位置40-43)
-    wavData[40] = dataSize & 0xFF;
-    wavData[41] = (dataSize >> 8) & 0xFF;
-    wavData[42] = (dataSize >> 16) & 0xFF;
-    wavData[43] = (dataSize >> 24) & 0xFF;
-  }
-
-  /// 更新文件中WAV文件头的大小信息
-  Future<void> _updateWavHeaderInFile(File file, int dataSize) async {
-    RandomAccessFile raf = await file.open(mode: FileMode.writeOnly);
-    try {
-      // 更新文件总大小 (位置4-7)
-      final totalSize = dataSize + 36; // 36 = 44 - 8 (RIFF header)
-      await raf.setPosition(4);
-      await raf.writeByte(totalSize & 0xFF);
-      await raf.writeByte((totalSize >> 8) & 0xFF);
-      await raf.writeByte((totalSize >> 16) & 0xFF);
-      await raf.writeByte((totalSize >> 24) & 0xFF);
-      
-      // 更新数据块大小 (位置40-43)
-      await raf.setPosition(40);
-      await raf.writeByte(dataSize & 0xFF);
-      await raf.writeByte((dataSize >> 8) & 0xFF);
-      await raf.writeByte((dataSize >> 16) & 0xFF);
-      await raf.writeByte((dataSize >> 24) & 0xFF);
-      
-      await raf.flush();
-    } finally {
-      await raf.close();
-    }
-  }
-
-  /// 更新WAV文件头中的大小信息
-  void _updateWavHeader(List<int> wavData, int dataSize) {
-    // 更新文件总大小 (位置4-7)
-    final totalSize = dataSize + 36; // 36 = 44 - 8 (RIFF header)
-    wavData[4] = totalSize & 0xFF;
-    wavData[5] = (totalSize >> 8) & 0xFF;
-    wavData[6] = (totalSize >> 16) & 0xFF;
-    wavData[7] = (totalSize >> 24) & 0xFF;
-    
-    // 更新数据块大小 (位置40-43)
-    wavData[40] = dataSize & 0xFF;
-    wavData[41] = (dataSize >> 8) & 0xFF;
-    wavData[42] = (dataSize >> 16) & 0xFF;
-    wavData[43] = (dataSize >> 24) & 0xFF;
-  }
-
-  /// 基于临时文件的音频消费（备用方式）
   void _consumeAudioBuffersFileMode() async {
     while (_isPlayingFile && !_stopFileChunkProcessingLoop) {
       if (_audioBufferQueue.isNotEmpty) {
         final audioData = _audioBufferQueue.removeFirst();
         
-        // 创建临时文件用于播放（只在播放时创建，播放后删除）
         final tempFile = File(path_helper.join(_appDir, "temp_chunk_${DateTime.now().millisecondsSinceEpoch}.wav"));
         await tempFile.writeAsBytes(audioData);
         
         try {
-          // 添加到播放队列
           if (_concatenatingFileSource != null && _isPlayingFile) {
             await _concatenatingFileSource!.add(AudioSource.uri(Uri.file(tempFile.path)));
-            print("_consumeAudioBuffersFileMode: Added buffer ${_bufferPlaybackIndex} to player");
             _bufferPlaybackIndex++;
             
-            // 延迟删除临时文件（播放完成后）
             Future.delayed(Duration(seconds: _chunkDurationSeconds + 2), () {
               if (tempFile.existsSync()) {
                 tempFile.deleteSync();
@@ -1974,17 +1523,13 @@ class AudioManagerStream {
           }
         }
       } else {
-        // 等待新的缓冲数据
         await Future.delayed(Duration(milliseconds: 100));
       }
     }
-    print("_consumeAudioBuffersFileMode: File mode playback consumption stopped");
   }
 
-  /// 释放资源
   Future<void> dispose() async {
     try {
-      // 停止所有活动
       if (_isStreamProcessing) {
         await stopStreamProcessing();
       }
@@ -1992,31 +1537,14 @@ class AudioManagerStream {
         await stopRecording();
       }
       
-      // 停止文件处理并清理资源
       await _stopAndCleanupFileProcessing();
-      
-      // 清理RNNoise状态
       _rnnoise.cleanupState();
-      
-      // 取消定时器
       _audioSaveTimer?.cancel();
       _audioReadTimer?.cancel();
-      
-      // 取消订阅
       await _audioDataSubscription?.cancel();
-      
-      // 关闭音频流控制器
       await _audioStreamController?.close();
-      
-      // 释放播放器
-      // await _originalPlayer.dispose(); // 移除
-      // await _processedPlayer.dispose(); // 移除
-      await _player.dispose(); // 释放统一播放器
-
-      // 释放录音器
+      await _player.dispose();
       await _recorder.dispose();
-      
-      // 释放流处理器
       _streamProcessor?.dispose();
       
       _isInitialized = false;
@@ -2026,6 +1554,20 @@ class AudioManagerStream {
     }
   }
 } 
+
+class AudioProcessResult {
+  final Float32List processedAudio;
+  final double vadProbability;
+  final int framesProcessed;
+  final DateTime timestamp;
+
+  AudioProcessResult({
+    required this.processedAudio,
+    required this.vadProbability,
+    required this.framesProcessed,
+    required this.timestamp,
+  });
+}
 
 
 
